@@ -1,4 +1,4 @@
-> **Demo de despliegue — Curso Integrador I (UTP).** Copia del proyecto VolunMatch del grupo de Huancas Zuleika, usada en clase para mostrar cómo publicar un sistema full-stack con servicios gratuitos.
+> **Demo de despliegue — Curso Integrador I (UTP).** Copia del proyecto VolunMatch, usada en clase para mostrar cómo publicar un sistema full-stack con servicios gratuitos.
 >
 > | Pieza | Servicio | URL |
 > |---|---|---|
@@ -130,10 +130,7 @@ Frontend: http://localhost:5173
 
 
 ## 👥 Equipo
-- Huancas Zuleika
-- Leyva Merly
-- López Sayuri
-- Santamaria Greysy
+Equipo del proyecto VolunMatch (Curso Integrador I).
 
 ## Link de figma 
 https://www.figma.com/design/fq1zzeC77frbJSAuEocsFs/Voluntariado?node-id=0-1&p=f&t=Dhj6PzLER92tr3Gf-0 
