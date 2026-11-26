@@ -1,3 +1,13 @@
+> **Demo de despliegue — Curso Integrador I (UTP).** Copia del proyecto VolunMatch del grupo de Huancas Zuleika, usada en clase para mostrar cómo publicar un sistema full-stack con servicios gratuitos.
+>
+> | Pieza | Servicio | URL |
+> |---|---|---|
+> | Frontend (React + Vite) | Vercel | https://volunmatch-demo.vercel.app |
+> | Backend (Node + Express) | Render | https://volunmatch-api.onrender.com/api/test-db |
+> | Base de datos (PostgreSQL) | Neon | — |
+>
+> Los commits posteriores a la copia muestran los cambios necesarios para desplegar (`DATABASE_URL` con SSL, CORS con `FRONTEND_URL`, script SQL compatible con Neon).
+
 # 🐘 VolunMatch — Proyecto Integrador
 
 Sistema de gestión de voluntariado que conecta **empresas/organizaciones** 
