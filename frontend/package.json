@@ -1,0 +1,25 @@
+{
+  "name": "@volunmatch/frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config configuracion-vite.js",
+    "build": "vite build --config configuracion-vite.js",
+    "preview": "vite preview --config configuracion-vite.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-datepicker": "^9.1.0",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.3",
+    "vite": "^6.0.5"
+  }
+}

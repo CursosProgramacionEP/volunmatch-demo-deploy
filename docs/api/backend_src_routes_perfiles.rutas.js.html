@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: backend/src/routes/perfiles.rutas.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: backend/src/routes/perfiles.rutas.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { Router } from 'express';
+import pool from '../config/db.js';
+import { auth } from '../middlewares/autenticacion.js';
+
+export const profilesRouter = Router();
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const namePattern = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]{3,100}$/;
+const phonePattern = /^[0-9+() -]{7,20}$/;
+
+/**
+ * Obtiene las iniciativas de una empresa, limitándolas a las activas cuando
+ * un voluntario consulta el perfil público.
+ * @param {number} companyId Identificador de la empresa.
+ * @param {boolean} [publicOnly=false] Indica si solo deben mostrarse iniciativas activas.
+ * @returns {Promise&lt;Array&lt;object>>} Iniciativas serializadas para la interfaz.
+ */
+async function companyInitiatives(companyId, publicOnly = false) {
+  const result = await pool.query(
+    `SELECT idiniciativa AS id, titulo AS title, descripcion AS summary, categoria AS category,
+            fechainicio AS date, fechafin AS end_date, lugar AS location, numcupo AS quota,
+            estado
+     FROM iniciativa
+     WHERE idempresa = $1 ${publicOnly ? "AND estado = 'activa'" : ''}
+     ORDER BY fechainicio DESC`,
+    [companyId],
+  );
+
+  return result.rows.map((initiative) => ({
+    ...initiative,
+    endDate: initiative.end_date,
+  }));
+}
+
+/**
+ * Devuelve la información que un usuario autenticado puede editar y consultar.
+ * @param {{id: number, role: 'volunteer'|'company'}} user Usuario validado por JWT.
+ * @returns {Promise&lt;object|null>} Perfil del usuario o null si ya no existe.
+ */
+async function ownProfile(user) {
+  if (user.role === 'volunteer') {
+    const result = await pool.query(
+      `SELECT idvoluntario AS id, nombrecompleto AS full_name, correo AS email,
+              telefono AS phone, biografia AS bio, creado_en
+       FROM voluntario WHERE idvoluntario = $1`,
+      [user.id],
+    );
+    const profile = result.rows[0];
+    if (!profile) return null;
+
+    const progress = await pool.query(
+      `SELECT COUNT(DISTINCT p.idiniciativa) FILTER (WHERE p.estado = 'aceptado') AS accepted,
+              COUNT(DISTINCT t.idtarea) FILTER (WHERE t.estado = 'finalizado' AND t.idvoluntario_asignado = $1) AS completed_tasks
+       FROM postulacion p
+       LEFT JOIN tarea t ON t.idiniciativa = p.idiniciativa
+       WHERE p.idvoluntario = $1`,
+      [user.id],
+    );
+
+    const certifications = await pool.query(
+      `SELECT idcertificacion AS id, titulo AS title, entidad AS issuer,
+              fecha_emision AS issued_at, url_documento AS document_url
+       FROM certificacion
+       WHERE idvoluntario = $1
+       ORDER BY fecha_emision DESC NULLS LAST, creado_en DESC`,
+      [user.id],
+    );
+
+    return {
+      id: profile.id,
+      role: 'volunteer',
+      fullName: profile.full_name,
+      email: profile.email,
+      phone: profile.phone || '',
+      bio: profile.bio || '',
+      createdAt: profile.creado_en,
+      acceptedInitiatives: Number(progress.rows[0]?.accepted || 0),
+      completedTasks: Number(progress.rows[0]?.completed_tasks || 0),
+      certifications: certifications.rows.map((certification) => ({
+        id: certification.id,
+        title: certification.title,
+        issuer: certification.issuer,
+        issuedAt: certification.issued_at,
+        documentUrl: certification.document_url,
+      })),
+    };
+  }
+
+  const result = await pool.query(
+    `SELECT idempresa AS id, nombreempresa AS company_name, ruc, nombrecoordinador AS contact_name,
+            correo AS email, sector
+     FROM empresa WHERE idempresa = $1`,
+    [user.id],
+  );
+  const profile = result.rows[0];
+  if (!profile) return null;
+
+  return {
+    id: profile.id,
+    role: 'company',
+    companyName: profile.company_name,
+    ruc: profile.ruc,
+    contactName: profile.contact_name,
+    email: profile.email,
+    sector: profile.sector,
+    initiatives: await companyInitiatives(profile.id),
+  };
+}
+
+profilesRouter.get('/me', auth(), async (req, res) => {
+  try {
+    const profile = await ownProfile(req.user);
+    if (!profile) return res.status(404).json({ message: 'No se encontró el perfil.' });
+    return res.json({ profile });
+  } catch (err) {
+    console.error('Error al consultar perfil:', err.message);
+    return res.status(500).json({ message: 'No se pudo cargar el perfil.' });
+  }
+});
+
+profilesRouter.patch('/me', auth(), async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  if (!emailPattern.test(email)) {
+    return res.status(400).json({ message: 'Ingresa un correo electrónico válido.' });
+  }
+
+  try {
+    const [existingVolunteer, existingCompany] = await Promise.all([
+      pool.query('SELECT idvoluntario FROM voluntario WHERE correo = $1', [email]),
+      pool.query('SELECT idempresa FROM empresa WHERE correo = $1', [email]),
+    ]);
+    const emailUsedByAnotherUser = req.user.role === 'volunteer'
+      ? existingVolunteer.rows.some((row) => row.idvoluntario !== req.user.id) || existingCompany.rowCount > 0
+      : existingVolunteer.rowCount > 0 || existingCompany.rows.some((row) => row.idempresa !== req.user.id);
+    if (emailUsedByAnotherUser) {
+      return res.status(409).json({ message: 'Este correo ya está registrado.' });
+    }
+
+    if (req.user.role === 'volunteer') {
+      const fullName = String(req.body.fullName || '').trim();
+      const phone = String(req.body.phone || '').trim();
+      const bio = String(req.body.bio || '').trim();
+      if (!namePattern.test(fullName)) {
+        return res.status(400).json({ message: 'El nombre debe tener al menos 3 letras y no incluir números ni símbolos.' });
+      }
+      if (phone &amp;&amp; !phonePattern.test(phone)) {
+        return res.status(400).json({ message: 'El teléfono solo puede contener números, espacios, paréntesis y el signo +.' });
+      }
+      await pool.query(
+        `UPDATE voluntario
+         SET nombrecompleto = $1, correo = $2, telefono = $3, biografia = $4
+         WHERE idvoluntario = $5`,
+        [fullName, email, phone || null, bio || null, req.user.id],
+      );
+    } else {
+      const companyName = String(req.body.companyName || '').trim();
+      const contactName = String(req.body.contactName || '').trim();
+      const sector = String(req.body.sector || '').trim();
+      if (companyName.length &lt; 3 || contactName.length &lt; 3 || !sector) {
+        return res.status(400).json({ message: 'Completa el nombre de la empresa, responsable y sector.' });
+      }
+      await pool.query(
+        `UPDATE empresa
+         SET nombreempresa = $1, nombrecoordinador = $2, correo = $3, sector = $4
+         WHERE idempresa = $5`,
+        [companyName, contactName, email, sector, req.user.id],
+      );
+    }
+
+    const profile = await ownProfile(req.user);
+    return res.json({ profile });
+  } catch (err) {
+    console.error('Error al actualizar perfil:', err.message);
+    return res.status(500).json({ message: 'No se pudieron guardar los cambios del perfil.' });
+  }
+});
+
+/**
+ * Registra una certificación que un voluntario puede mostrar en su perfil.
+ * @param {object} req Solicitud con los datos de la certificación.
+ * @param {object} res Respuesta HTTP serializada.
+ * @returns {Promise&lt;void>}
+ */
+profilesRouter.post('/me/certifications', auth('volunteer'), async (req, res) => {
+  const title = String(req.body.title || '').trim();
+  const issuer = String(req.body.issuer || '').trim();
+  const issuedAt = req.body.issuedAt || null;
+  const documentUrl = String(req.body.documentUrl || '').trim() || null;
+
+  if (title.length &lt; 3 || issuer.length &lt; 3) {
+    return res.status(400).json({ message: 'Completa el nombre de la certificación y la entidad emisora.' });
+  }
+  if (documentUrl &amp;&amp; !/^https?:\/\//i.test(documentUrl)) {
+    return res.status(400).json({ message: 'La URL del documento debe comenzar con http:// o https://.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO certificacion (idvoluntario, titulo, entidad, fecha_emision, url_documento)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING idcertificacion AS id, titulo AS title, entidad AS issuer,
+                 fecha_emision AS issued_at, url_documento AS document_url`,
+      [req.user.id, title, issuer, issuedAt, documentUrl],
+    );
+    const certification = result.rows[0];
+    return res.status(201).json({
+      certification: {
+        id: certification.id,
+        title: certification.title,
+        issuer: certification.issuer,
+        issuedAt: certification.issued_at,
+        documentUrl: certification.document_url,
+      },
+    });
+  } catch (err) {
+    console.error('Error al registrar certificación:', err.message);
+    return res.status(500).json({ message: 'No se pudo registrar la certificación.' });
+  }
+});
+
+profilesRouter.get('/company/:id', auth(), async (req, res) => {
+  try {
+    const company = await pool.query(
+      `SELECT idempresa AS id, nombreempresa AS company_name, ruc,
+              nombrecoordinador AS contact_name, correo AS email, sector
+       FROM empresa WHERE idempresa = $1`,
+      [req.params.id],
+    );
+    if (!company.rowCount) return res.status(404).json({ message: 'No se encontró la empresa.' });
+
+    const profile = company.rows[0];
+    return res.json({
+      profile: {
+        id: profile.id,
+        role: 'company',
+        companyName: profile.company_name,
+        ruc: profile.ruc,
+        contactName: profile.contact_name,
+        email: profile.email,
+        sector: profile.sector,
+        initiatives: await companyInitiatives(profile.id, true),
+      },
+    });
+  } catch (err) {
+    console.error('Error al consultar perfil de empresa:', err.message);
+    return res.status(500).json({ message: 'No se pudo cargar el perfil de la empresa.' });
+  }
+});
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ActivitiesPage">ActivitiesPage</a></li><li><a href="global.html#AuthPage">AuthPage</a></li><li><a href="global.html#CompanyDashboard">CompanyDashboard</a></li><li><a href="global.html#CompanyPublicProfilePage">CompanyPublicProfilePage</a></li><li><a href="global.html#Field">Field</a></li><li><a href="global.html#HistoryPage">HistoryPage</a></li><li><a href="global.html#ModalNuevaTarea">ModalNuevaTarea</a></li><li><a href="global.html#NewInitiativePage">NewInitiativePage</a></li><li><a href="global.html#NotificationsPage">NotificationsPage</a></li><li><a href="global.html#ProfilePage">ProfilePage</a></li><li><a href="global.html#companyInitiatives">companyInitiatives</a></li><li><a href="global.html#createNotification">createNotification</a></li><li><a href="global.html#ownProfile">ownProfile</a></li><li><a href="global.html#profileToForm">profileToForm</a></li><li><a href="global.html#serializeInitiative">serializeInitiative</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 03:10:54 GMT-0500 (hora estándar de Perú)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

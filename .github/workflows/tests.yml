@@ -1,0 +1,111 @@
+name: Pruebas automatizadas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  cambios:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filtro.outputs.backend }}
+      frontend: ${{ steps.filtro.outputs.frontend }}
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+      - name: Detectar carpetas modificadas
+        id: filtro
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'database/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - '.github/workflows/tests.yml'
+            frontend:
+              - 'frontend/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - '.github/workflows/tests.yml'
+
+  test-backend:
+    needs: cambios
+    if: needs.cambios.outputs.backend == 'true' || needs.cambios.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: VolunMatch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d VolunMatch"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile --filter @volunmatch/backend...
+      - name: Cargar esquema de la base de datos
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d VolunMatch -v ON_ERROR_STOP=1 -f database/volunmatch_datos.sql
+      - name: Ejecutar pruebas del backend
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: VolunMatch
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/VolunMatch
+          NODE_ENV: test
+          JWT_SECRET: secreto-de-prueba-para-ci
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_PRUEBA }}
+        run: pnpm test
+
+  test-frontend:
+    needs: cambios
+    if: needs.cambios.outputs.backend == 'true' || needs.cambios.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile --filter @volunmatch/frontend...
+      - name: Ejecutar pruebas del frontend
+        working-directory: frontend
+        run: pnpm test

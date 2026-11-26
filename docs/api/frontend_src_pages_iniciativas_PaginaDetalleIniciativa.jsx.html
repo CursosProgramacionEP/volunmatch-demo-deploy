@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: frontend/src/pages/iniciativas/PaginaDetalleIniciativa.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: frontend/src/pages/iniciativas/PaginaDetalleIniciativa.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  HeartHandshake,
+  Leaf,
+  MapPin,
+  ShieldCheck,
+  Users,
+  XCircle,
+} from "lucide-react";
+import { Loader } from "../../components/comunes/Cargador.jsx";
+import { EmptyState } from "../../components/comunes/EstadoVacio.jsx";
+import { Button } from "../../components/comunes/Boton.jsx";
+import { Modal } from "../../components/comunes/VentanaModal.jsx";
+import { api } from "../../services/cliente-api.js";
+import { go } from "../../navigation/navegacion.js";
+
+const initialForm = (user) => ({
+  fullName: user.fullName || "",
+  email: user.email || "",
+  phone: "",
+  schedule: "Mañana (08:00 AM - 12:00 PM)",
+  saturday: true,
+  sunday: false,
+  motivation: "",
+  experience: "",
+  shirtSize: "M",
+  restrictions: "",
+  acceptedTerms: false,
+});
+
+export function InitiativeDetailPage({
+  token,
+  user,
+  initiativeId,
+  showNotice,
+}) {
+  const [initiative, setInitiative] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [step, setStep] = useState("detail");
+  const [form, setForm] = useState(() => initialForm(user));
+  const [busy, setBusy] = useState(false);
+  const [yaPostulado, setYaPostulado] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      api.initiative(token, initiativeId),
+      api.verificarPostulacion(token, initiativeId).catch(() => ({ yaPostulado: false }))
+    ])
+      .then(([initiativeRes, verificacionRes]) => {
+        setInitiative(initiativeRes.initiative);
+        if (verificacionRes.yaPostulado) {
+          setYaPostulado(true);
+        }
+      })
+      .catch((requestError) => setError(requestError.message))
+      .finally(() => setLoading(false));
+  }, [token, initiativeId]);
+
+  function updateForm({ target }) {
+    setForm((current) => ({
+      ...current,
+      [target.name]: target.type === "checkbox" ? target.checked : target.value,
+    }));
+  }
+
+  async function submitApplication(event) {
+    event.preventDefault();
+    if (
+      !form.phone.trim() ||
+      !form.motivation.trim() ||
+      !form.acceptedTerms ||
+      (!form.saturday &amp;&amp; !form.sunday)
+    )
+      return showNotice({
+        type: "error",
+        text: "Completa tu teléfono, motivación, días disponibles y acepta los lineamientos.",
+      });
+    setBusy(true);
+    try {
+      await api.apply(token, initiative.id, form);
+      setInitiative((current) => ({
+        ...current,
+        applicationStatus: "pending",
+      }));
+      setYaPostulado(true);
+      setStep("success");
+    } catch (requestError) {
+      showNotice({ type: "error", text: requestError.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Cancela la iniciativa, conserva el registro histórico y avisa a sus participantes. */
+  async function cancelInitiative() {
+    setCancelling(true);
+    try {
+      await api.cancelInitiative(token, initiative.id);
+      setInitiative((current) => ({ ...current, status: 'cancelled' }));
+      setCancelOpen(false);
+      showNotice({ text: 'La iniciativa fue cancelada y se conservará en el historial.' });
+    } catch (requestError) {
+      showNotice({ type: 'error', text: requestError.message });
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  if (loading)
+    return (
+      &lt;section className="workspace-content">
+        &lt;Loader />
+      &lt;/section>
+    );
+  if (error || !initiative)
+    return (
+      &lt;section className="workspace-content">
+        &lt;EmptyState
+          title="No pudimos abrir esta iniciativa"
+          text={error || "Vuelve a explorar las iniciativas disponibles."}
+          action={() => go("/volunteer/explore")}
+        />
+      &lt;/section>
+    );
+
+  const canBoard =
+    initiative.isMember ||
+    initiative.applicationStatus === "accepted" ||
+    (user.role === "company" &amp;&amp; initiative.companyId === user.id);
+  const available = Math.max(initiative.quota - initiative.joinedCount, 0);
+  const isOwner = user.role === 'company' &amp;&amp; initiative.companyId === user.id;
+  const isCancelled = initiative.status === 'cancelled';
+
+  if (step === "form")
+    return (
+      &lt;ApplicationForm
+        initiative={initiative}
+        available={available}
+        form={form}
+        busy={busy}
+        onChange={updateForm}
+        onSubmit={submitApplication}
+        onCancel={() => setStep("detail")}
+      />
+    );
+
+  return (
+    &lt;section className="workspace-content initiative-detail">
+      &lt;button
+        className="back-link"
+        onClick={() =>
+          go(
+            user.role === "company"
+              ? "/company/dashboard"
+              : "/volunteer/explore",
+          )
+        }
+      >
+        &lt;ArrowLeft size={18} /> Regresar
+      &lt;/button>
+      &lt;article className="initiative-detail__card">
+        &lt;header>
+          &lt;div>
+            {user.role === 'volunteer' ? (
+              &lt;button className="company-profile-link" onClick={() => go(`/company/profile/${initiative.companyId}`)}>&lt;Building2 size={15} /> Empresa: {initiative.companyName}&lt;/button>
+            ) : &lt;p className="company-label">Empresa: {initiative.companyName}&lt;/p>}
+            &lt;h1>{initiative.title}&lt;/h1>
+          &lt;/div>
+          &lt;span className="category-chip">{initiative.category}&lt;/span>
+        &lt;/header>
+        &lt;div className="initiative-detail__content">
+          &lt;div>
+            &lt;section>
+              &lt;h2>Información básica&lt;/h2>
+              &lt;p className="info-panel">{initiative.summary}&lt;/p>
+              &lt;div className="info-lines">
+                &lt;span>
+                  &lt;CalendarDays size={20} />
+                  {initiative.date}
+                &lt;/span>
+                &lt;span>
+                  &lt;MapPin size={20} />
+                  {initiative.location}
+                &lt;/span>
+              &lt;/div>
+            &lt;/section>
+            &lt;section>
+              &lt;h2>Requisitos&lt;/h2>
+              &lt;ul className="requirements">
+                {initiative.requirements.map((requirement) => (
+                  &lt;li key={requirement}>
+                    &lt;CheckCircle2 size={17} />
+                    {requirement}
+                  &lt;/li>
+                ))}
+              &lt;/ul>
+            &lt;/section>
+          &lt;/div>
+          &lt;div>
+            &lt;div className={`detail-visual cover--${initiative.cover}`}>
+              &lt;div className="cover-art">
+                &lt;i />
+                &lt;i />
+                &lt;i />
+              &lt;/div>
+              &lt;span className="detail-visual__caption">
+                &lt;Leaf size={28} /> Acciones que dejan huella
+              &lt;/span>
+            &lt;/div>
+            &lt;p className="detail-capacity">
+              &lt;Users size={16} /> {available} cupos disponibles
+            &lt;/p>
+          &lt;/div>
+        &lt;/div>
+        &lt;footer>
+          {isCancelled ? (
+            &lt;span className="initiative-cancelled">&lt;XCircle size={17} /> Iniciativa cancelada&lt;/span>
+          ) : canBoard ? (
+            &lt;Button
+              onClick={() => go(`/kanban/${initiative.id}`)}
+              icon={ArrowRight}
+            >
+              Ir al tablero Kanban
+            &lt;/Button>
+          ) : yaPostulado || initiative.applicationStatus === "pending" ? (
+            // Si ya postuló (según la BD o localmente), mostramos el mensaje
+            &lt;Button disabled variant="secondary">
+              &lt;Clock3 size={17} /> Pendiente
+            &lt;/Button>
+          ) : user.role === "volunteer" ? (
+            &lt;Button onClick={() => setStep("form")} icon={HeartHandshake}>
+              Postularse
+            &lt;/Button>
+          ) : null}
+          {isOwner &amp;&amp; !isCancelled &amp;&amp; &lt;Button variant="danger" onClick={() => setCancelOpen(true)} icon={XCircle}>Cancelar iniciativa&lt;/Button>}
+        &lt;/footer>
+      &lt;/article>
+      {step === "success" &amp;&amp; (
+        &lt;SuccessModal
+          initiative={initiative}
+          form={form}
+          onClose={() => setStep("detail")}
+        />
+      )}
+      {cancelOpen &amp;&amp; &lt;CancelInitiativeModal busy={cancelling} onCancel={() => setCancelOpen(false)} onConfirm={cancelInitiative} />}
+    &lt;/section>
+  );
+}
+
+function ApplicationForm({
+  initiative,
+  available,
+  form,
+  busy,
+  onChange,
+  onSubmit,
+  onCancel,
+}) {
+  return (
+    &lt;section className="workspace-content application-page">
+      &lt;button className="back-link" onClick={onCancel}>
+        &lt;ArrowLeft size={18} /> Volver a iniciativa
+      &lt;/button>
+      &lt;header className="application-page__head">
+        &lt;div>
+          &lt;span className="category-chip category-chip--soft">
+            {initiative.category}
+          &lt;/span>
+          &lt;h1>Postulación: {initiative.title}&lt;/h1>
+          &lt;p>
+            Completa tus datos para enviar tu postulación a{" "}
+            {initiative.companyName}.
+          &lt;/p>
+        &lt;/div>
+        &lt;span className="capacity-chip">
+          &lt;i /> {available} cupos restantes disponibles
+        &lt;/span>
+      &lt;/header>
+      &lt;div className="application-layout">
+        &lt;form className="application-form" onSubmit={onSubmit}>
+          &lt;FormSection
+            number="1"
+            title="Datos personales y de contacto"
+            text="Información vinculada a tu cuenta para esta postulación."
+          >
+            &lt;label className="field">
+              &lt;span>Nombre completo &lt;em aria-hidden="true">*&lt;/em>&lt;/span>
+              &lt;input
+                name="fullName"
+                value={form.fullName}
+                onChange={onChange}
+                required
+              />
+            &lt;/label>
+            &lt;div className="form-grid">
+              &lt;label className="field">
+                &lt;span>Correo electrónico &lt;em aria-hidden="true">*&lt;/em>&lt;/span>
+                &lt;input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={onChange}
+                  required
+                />
+              &lt;/label>
+              &lt;label className="field">
+                &lt;span>Teléfono / WhatsApp &lt;em aria-hidden="true">*&lt;/em>&lt;/span>
+                &lt;input
+                  name="phone"
+                  value={form.phone}
+                  onChange={onChange}
+                  placeholder="Ej. +51 987 654 321"
+                  required
+                />
+              &lt;/label>
+            &lt;/div>
+          &lt;/FormSection>
+          &lt;FormSection
+            number="2"
+            title="Disponibilidad horaria"
+            text="Selecciona el turno y los días en que te comprometes a participar."
+          >
+            &lt;div className="schedule-options">
+              {[
+                "Mañana (08:00 AM - 12:00 PM)",
+                "Tarde (02:00 PM - 06:00 PM)",
+              ].map((option) => (
+                &lt;label
+                  className={`schedule-option ${form.schedule === option ? "selected" : ""}`}
+                  key={option}
+                >
+                  &lt;input
+                    type="radio"
+                    name="schedule"
+                    value={option}
+                    checked={form.schedule === option}
+                    onChange={onChange}
+                  />
+                  &lt;b>
+                    Turno {option.startsWith("Mañana") ? "mañana" : "tarde"}
+                  &lt;/b>
+                  &lt;span>{option}&lt;/span>
+                &lt;/label>
+              ))}
+            &lt;/div>
+            &lt;p className="form-label">
+              Días disponibles para la jornada inicial
+            &lt;/p>
+            &lt;div className="day-options">
+              &lt;label>
+                &lt;input
+                  type="checkbox"
+                  name="saturday"
+                  checked={form.saturday}
+                  onChange={onChange}
+                />{" "}
+                Sábado
+              &lt;/label>
+              &lt;label>
+                &lt;input
+                  type="checkbox"
+                  name="sunday"
+                  checked={form.sunday}
+                  onChange={onChange}
+                />{" "}
+                Domingo
+              &lt;/label>
+            &lt;/div>
+          &lt;/FormSection>
+          &lt;FormSection
+            number="3"
+            title="Motivación y experiencia"
+            text="Cuéntale a la organización tus motivaciones para unirte."
+          >
+            &lt;label className="field">
+              &lt;span>¿Por qué te gustaría participar en esta iniciativa? &lt;em aria-hidden="true">*&lt;/em>&lt;/span>
+              &lt;textarea
+                name="motivation"
+                value={form.motivation}
+                onChange={onChange}
+                placeholder="Comparte brevemente tu motivación..."
+                required
+              />
+            &lt;/label>
+            &lt;label className="field">
+              &lt;span>
+                ¿Tienes experiencia previa en voluntariados similares?
+                (Opcional)
+              &lt;/span>
+              &lt;textarea
+                name="experience"
+                value={form.experience}
+                onChange={onChange}
+                placeholder="Menciona si participaste antes en actividades similares."
+              />
+            &lt;/label>
+          &lt;/FormSection>
+          &lt;FormSection
+            number="4"
+            title="Logística y requerimientos"
+            text="Esta información ayuda a preparar tu jornada de voluntariado."
+          >
+            &lt;div className="form-grid">
+              &lt;label className="field">
+                &lt;span>Talla de camiseta / polo&lt;/span>
+                &lt;select
+                  name="shirtSize"
+                  value={form.shirtSize}
+                  onChange={onChange}
+                >
+                  {["XS", "S", "M", "L", "XL"].map((size) => (
+                    &lt;option key={size}>{size}&lt;/option>
+                  ))}
+                &lt;/select>
+              &lt;/label>
+              &lt;label className="field">
+                &lt;span>Restricción dietética o médica&lt;/span>
+                &lt;input
+                  name="restrictions"
+                  value={form.restrictions}
+                  onChange={onChange}
+                  placeholder="Ej. vegetariano, alergias..."
+                />
+              &lt;/label>
+            &lt;/div>
+            &lt;label className="terms-check">
+              &lt;input
+                type="checkbox"
+                name="acceptedTerms"
+                checked={form.acceptedTerms}
+                onChange={onChange}
+              />
+              &lt;span>
+                &lt;em aria-hidden="true">*&lt;/em> He leído y acepto los{" "}
+                &lt;b>lineamientos de participación y código de conducta&lt;/b>. Me
+                comprometo a asistir puntualmente al turno confirmado.
+              &lt;/span>
+            &lt;/label>
+          &lt;/FormSection>
+          &lt;footer className="application-form__footer">
+            &lt;Button type="button" variant="secondary" onClick={onCancel}>
+              Cancelar
+            &lt;/Button>
+            &lt;Button type="submit" icon={ArrowRight} disabled={busy}>
+              {busy ? "Enviando..." : "Enviar postulación"}
+            &lt;/Button>
+          &lt;/footer>
+        &lt;/form>
+        &lt;InitiativeSummary initiative={initiative} />
+      &lt;/div>
+    &lt;/section>
+  );
+}
+function FormSection({ number, title, text, children }) {
+  return (
+    &lt;section className="application-form__section">
+      &lt;header>
+        &lt;span>{number}&lt;/span>
+        &lt;div>
+          &lt;h2>{title}&lt;/h2>
+          &lt;p>{text}&lt;/p>
+        &lt;/div>
+      &lt;/header>
+      {children}
+    &lt;/section>
+  );
+}
+function InitiativeSummary({ initiative }) {
+  return (
+    &lt;aside className="application-summary">
+      &lt;div className={`application-summary__cover cover--${initiative.cover}`}>
+        &lt;div className="cover-art">
+          &lt;i />
+          &lt;i />
+          &lt;i />
+        &lt;/div>
+        &lt;span>{initiative.category}&lt;/span>
+      &lt;/div>
+      &lt;div className="application-summary__body">
+        &lt;p>Iniciativa seleccionada&lt;/p>
+        &lt;h2>{initiative.title}&lt;/h2>
+        &lt;small>
+          Empresa organizadora: &lt;b>{initiative.companyName}&lt;/b>
+        &lt;/small>
+        &lt;hr />
+        &lt;div>
+          &lt;CalendarDays size={16} />
+          &lt;span>
+            &lt;small>Fecha de ejecución&lt;/small>
+            {initiative.date}
+          &lt;/span>
+        &lt;/div>
+        &lt;div>
+          &lt;MapPin size={16} />
+          &lt;span>
+            &lt;small>Lugar&lt;/small>
+            {initiative.location}
+          &lt;/span>
+        &lt;/div>
+        &lt;div>
+          &lt;ShieldCheck size={16} />
+          &lt;span>
+            &lt;small>Certificación&lt;/small>Horas válidas de voluntariado
+          &lt;/span>
+        &lt;/div>
+      &lt;/div>
+    &lt;/aside>
+  );
+}
+function SuccessModal({ initiative, form, onClose }) {
+  const days = [form.saturday &amp;&amp; "Sábado", form.sunday &amp;&amp; "Domingo"]
+    .filter(Boolean)
+    .join(" y ");
+  return (
+    &lt;Modal onClose={onClose}>
+      &lt;div className="success-modal success-modal--application">
+        &lt;span className="success-icon">
+          &lt;CheckCircle2 size={34} />
+        &lt;/span>
+        &lt;h2>¡Te has registrado correctamente!&lt;/h2>
+        &lt;p>
+          Tu postulación a &lt;b>{initiative.title}&lt;/b> ha sido recibida con éxito.
+          Te notificaremos los próximos pasos.
+        &lt;/p>
+        &lt;div className="success-details">
+          &lt;span>
+            Turno seleccionado &lt;b>{form.schedule}&lt;/b>
+          &lt;/span>
+          &lt;span>
+            Días &lt;b>{days}&lt;/b>
+          &lt;/span>
+          &lt;span>
+            Organización &lt;b>{initiative.companyName}&lt;/b>
+          &lt;/span>
+        &lt;/div>
+        &lt;div className="success-actions">
+          &lt;Button onClick={() => go("/volunteer/activities")} icon={ArrowRight}>
+            Ir a mis actividades
+          &lt;/Button>
+          &lt;Button variant="secondary" onClick={onClose}>
+            Ver detalles
+          &lt;/Button>
+        &lt;/div>
+      &lt;/div>
+    &lt;/Modal>
+  );
+}
+
+function CancelInitiativeModal({ busy, onCancel, onConfirm }) {
+  return (
+    &lt;Modal onClose={onCancel}>
+      &lt;div className="confirm-modal">
+        &lt;span className="confirm-modal__icon">&lt;XCircle size={31} />&lt;/span>
+        &lt;h2>¿Cancelar esta iniciativa?&lt;/h2>
+        &lt;p>La convocatoria dejará de recibir postulaciones y se conservará en el historial. Los voluntarios aceptados recibirán una notificación.&lt;/p>
+        &lt;div className="confirm-modal__actions">
+          &lt;Button variant="secondary" onClick={onCancel} disabled={busy}>Volver&lt;/Button>
+          &lt;Button variant="danger" onClick={onConfirm} disabled={busy}>{busy ? 'Cancelando...' : 'Sí, cancelar iniciativa'}&lt;/Button>
+        &lt;/div>
+      &lt;/div>
+    &lt;/Modal>
+  );
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ActivitiesPage">ActivitiesPage</a></li><li><a href="global.html#AuthPage">AuthPage</a></li><li><a href="global.html#CompanyDashboard">CompanyDashboard</a></li><li><a href="global.html#CompanyPublicProfilePage">CompanyPublicProfilePage</a></li><li><a href="global.html#Field">Field</a></li><li><a href="global.html#HistoryPage">HistoryPage</a></li><li><a href="global.html#ModalNuevaTarea">ModalNuevaTarea</a></li><li><a href="global.html#NewInitiativePage">NewInitiativePage</a></li><li><a href="global.html#NotificationsPage">NotificationsPage</a></li><li><a href="global.html#ProfilePage">ProfilePage</a></li><li><a href="global.html#companyInitiatives">companyInitiatives</a></li><li><a href="global.html#createNotification">createNotification</a></li><li><a href="global.html#ownProfile">ownProfile</a></li><li><a href="global.html#profileToForm">profileToForm</a></li><li><a href="global.html#serializeInitiative">serializeInitiative</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 03:10:54 GMT-0500 (hora estándar de Perú)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

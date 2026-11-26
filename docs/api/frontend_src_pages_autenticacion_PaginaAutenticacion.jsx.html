@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>
+      JSDoc: Source: frontend/src/pages/autenticacion/PaginaAutenticacion.jsx
+    </title>
+
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link
+      type="text/css"
+      rel="stylesheet"
+      href="styles/prettify-tomorrow.css"
+    />
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css" />
+  </head>
+
+  <body>
+    <div id="main">
+      <h1 class="page-title">
+        Source: frontend/src/pages/autenticacion/PaginaAutenticacion.jsx
+      </h1>
+
+      <section>
+        <article>
+          <pre
+            class="prettyprint source linenums"
+          ><code>import { useState } from 'react';
+import { ArrowLeft, ArrowRight, BriefcaseBusiness, HeartHandshake, Leaf } from 'lucide-react';
+import { Brand } from '../../components/autenticacion/Marca.jsx';
+import { Button } from '../../components/comunes/Boton.jsx';
+import { Field } from '../../components/comunes/Campo.jsx';
+import { api } from '../../services/cliente-api.js';
+import { go } from '../../navigation/navegacion.js';
+import { categories } from '../../constants/aplicacion.js';
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Gestiona acceso, registro y solicitud de recuperación de contraseña.
+ * @param {{onAuthenticated: Function, showNotice: Function}} props Acciones que actualizan la sesión y los avisos.
+ * @returns {JSX.Element} Pantalla de autenticación de VolunMatch.
+ */
+export function AuthPage({ onAuthenticated, showNotice }) {
+  const [mode, setMode] = useState('login');
+  const [role, setRole] = useState('volunteer');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [recoverySent, setRecoverySent] = useState(false);
+  const [form, setForm] = useState({
+    fullName: '', email: '', password: '', phone: '', bio: '',
+    companyName: '', ruc: '', sector: 'Medio ambiente', contactName: '',
+  });
+
+  const isRegister = mode === 'register';
+  const isRecovery = mode === 'recovery';
+
+  function update(event) {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+    if (name === 'email') setEmailError('');
+    setError('');
+  }
+
+  function validateEmail() {
+    const nextError = emailPattern.test(form.email.trim()) ? '' : 'Ingresa un correo electrónico válido.';
+    setEmailError(nextError);
+    return !nextError;
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!validateRegistration()) return;
+    if (!validateEmail()) return;
+    setBusy(true);
+    setError('');
+    try {
+
+      const finalFormData = {
+        ...form,
+        sector: form.sector === "Otro" ? form.customSector : form.sector,
+      };
+      
+      const response = isRegister
+        ? await api.register({ ...finalFormData, role })
+        : await api.login({ email: form.email, password: form.password });
+      onAuthenticated(response);
+      showNotice({ text: isRegister ? 'Tu cuenta fue creada. ¡Bienvenido a VolunMatch!' : 'Sesión iniciada correctamente.' });
+      go(response.user.role === 'company' ? '/company/dashboard' : '/volunteer/explore');
+    } catch (requestError) {
+      setError(!isRegister &amp;&amp; requestError.message === 'Correo o contraseña incorrectos.'
+        ? 'Correo o contraseña incorrectos. Revisa tus datos y verifica que elegiste el perfil correcto.'
+        : requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitRecovery(event) {
+    event.preventDefault();
+    if (!validateEmail()) return;
+    setBusy(true);
+    setError('');
+    try {
+      const response = await api.recoverPassword({ email: form.email });
+      setRecoverySent(true);
+      showNotice({ text: response.message });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function changeMode(nextMode) {
+    setMode(nextMode);
+    setError('');
+    setEmailError('');
+    setRecoverySent(false);
+  }
+
+  return (
+    &lt;main className="auth-page">
+      &lt;div className="auth-page__top">
+        &lt;Brand />
+        &lt;button className="link-button" onClick={() => go('/')}>
+          &lt;ArrowLeft size={16} /> Volver al inicio
+        &lt;/button>
+      &lt;/div>
+
+      &lt;section className="auth-shell">
+        &lt;AuthAside />
+        &lt;div className="auth-panel">
+          {isRecovery ? (
+            &lt;RecoveryForm
+              form={form}
+              busy={busy}
+              error={error}
+              emailError={emailError}
+              recoverySent={recoverySent}
+              onChange={update}
+              onBlur={validateEmail}
+              onSubmit={submitRecovery}
+              onBack={() => changeMode('login')}
+            />
+          ) : (
+            &lt;>
+              &lt;div className="auth-panel__heading">
+                &lt;p className="section-kicker">{isRegister ? 'ÚNETE A LA RED' : 'BIENVENIDO DE NUEVO'}&lt;/p>
+                &lt;h2>{isRegister ? 'Crea tu cuenta' : 'Ingresa a VolunMatch'}&lt;/h2>
+                &lt;p>{isRegister ? 'Elige el perfil que representa tu participación.' : 'Accede para continuar con tus iniciativas y tareas.'}&lt;/p>
+              &lt;/div>
+
+              &lt;div className="role-toggle" role="tablist" aria-label="Tipo de cuenta">
+                &lt;button type="button" className={role === 'volunteer' ? 'active' : ''} onClick={() => setRole('volunteer')}>
+                  &lt;HeartHandshake size={17} /> Voluntario
+                &lt;/button>
+                &lt;button type="button" className={role === 'company' ? 'active' : ''} onClick={() => setRole('company')}>
+                  &lt;BriefcaseBusiness size={17} /> Empresa
+                &lt;/button>
+              &lt;/div>
+
+              &lt;form className="auth-form" onSubmit={submit} noValidate>
+                {isRegister &amp;&amp; role === 'volunteer' &amp;&amp; (
+                  &lt;>
+                    &lt;Field label="Nombre y apellidos" name="fullName" placeholder="Ej. Ana García" value={form.fullName} onChange={update} required />
+                    &lt;div className="field-row">
+                      &lt;Field label="Teléfono" name="phone" placeholder="987 654 321" value={form.phone} onChange={update} />
+                      &lt;Field label="Correo electrónico" name="email" type="email" placeholder="ana@correo.com" value={form.email} onChange={update} onBlur={validateEmail} error={emailError} required />
+                    &lt;/div>
+                    &lt;Field label="Cuéntanos brevemente de ti" name="bio" as="textarea" placeholder="Tus intereses o experiencia como voluntario..." value={form.bio} onChange={update} />
+                  &lt;/>
+                )}
+
+                {isRegister &amp;&amp; role === 'company' &amp;&amp; (
+                  &lt;>
+                    &lt;div className="field-row">
+                      &lt;Field label="Razón social" name="companyName" placeholder="Nombre de la empresa" value={form.companyName} onChange={update} required />
+                      &lt;Field label="RUC" name="ruc" placeholder="20601234567" value={form.ruc} onChange={update} required />
+                    &lt;/div>
+                    &lt;Field label="Nombre de contacto" name="contactName" placeholder="Persona responsable" value={form.contactName} onChange={update} />
+                    &lt;div className="field-row">
+                      &lt;Field label="Sector" name="sector" as="select" value={form.sector} onChange={update} options={categories.slice(1).concat('Otro')} required />
+                      &lt;Field label="Correo corporativo" name="email" type="email" placeholder="contacto@empresa.com" value={form.email} onChange={update} onBlur={validateEmail} error={emailError} required />
+                    &lt;/div>
+                  &lt;/>
+                )}
+
+                {!isRegister &amp;&amp; (
+                  &lt;Field
+                    label="Correo electrónico"
+                    name="email"
+                    type="email"
+                    placeholder={role === 'volunteer' ? 'ana@volunmatch.pe' : 'empresa@volunmatch.pe'}
+                    value={form.email}
+                    onChange={update}
+                    onBlur={validateEmail}
+                    error={emailError}
+                    required
+                  />
+                )}
+
+                &lt;Field
+                  label="Contraseña"
+                  name="password"
+                  type="password"
+                  placeholder={isRegister ? 'Crea una contraseña' : 'Tu contraseña'}
+                  hint={isRegister ? 'Mínimo 6 caracteres.' : ''}
+                  value={form.password}
+                  onChange={update}
+                  required
+                />
+
+                {!isRegister &amp;&amp; (
+                  &lt;button type="button" className="forgot-password" onClick={() => changeMode('recovery')}>
+                    ¿Olvidaste tu contraseña?
+                  &lt;/button>
+                )}
+                {error &amp;&amp; &lt;p className="form-error" role="alert">{error}&lt;/p>}
+
+                &lt;Button type="submit" className="auth-form__submit" icon={ArrowRight} disabled={busy}>
+                  {busy ? 'Procesando...' : (isRegister ? `Crear cuenta de ${role === 'volunteer' ? 'voluntario' : 'empresa'}` : 'Iniciar sesión')}
+                &lt;/Button>
+              &lt;/form>
+
+              &lt;p className="auth-switch">
+                {isRegister ? '¿Ya tienes una cuenta?' : '¿Aún no tienes cuenta?'}{' '}
+                &lt;button type="button" onClick={() => changeMode(isRegister ? 'login' : 'register')}>
+                  {isRegister ? 'Inicia sesión' : 'Regístrate'}
+                &lt;/button>
+              &lt;/p>
+            &lt;/>
+          )}
+        &lt;/div>
+      &lt;/section>
+    &lt;/main>
+  );
+}
+
+function AuthAside() {
+  return (
+    &lt;aside className="auth-aside">
+      &lt;Brand inverse />
+      &lt;div className="auth-aside__content">
+        &lt;span className="eyebrow eyebrow--light">&lt;Leaf size={14} /> ACCIONES QUE SUMAN&lt;/span>
+        &lt;h1>El cambio se organiza mejor en equipo.&lt;/h1>
+        &lt;p>Encuentra iniciativas, conecta con personas comprometidas y aporta desde tus habilidades.&lt;/p>
+      &lt;/div>
+      &lt;div className="auth-aside__numbers">
+        &lt;div>&lt;b>+1,200&lt;/b>&lt;span>voluntarios&lt;/span>&lt;/div>
+        &lt;div>&lt;b>86&lt;/b>&lt;span>iniciativas activas&lt;/span>&lt;/div>
+      &lt;/div>
+      &lt;div className="auth-aside__art">
+        &lt;span className="art-hill art-hill--one" />
+        &lt;span className="art-hill art-hill--two" />
+        &lt;span className="art-leaf art-leaf--one" />
+        &lt;span className="art-leaf art-leaf--two" />
+      &lt;/div>
+    &lt;/aside>
+  );
+}
+
+function RecoveryForm({ form, busy, error, emailError, recoverySent, onChange, onBlur, onSubmit, onBack }) {
+  return (
+    &lt;>
+      &lt;div className="auth-panel__heading">
+        &lt;p className="section-kicker">RECUPERAR ACCESO&lt;/p>
+        &lt;h2>¿Olvidaste tu contraseña?&lt;/h2>
+        &lt;p>Ingresa el correo registrado y te enviaremos las instrucciones para restablecerla.&lt;/p>
+      &lt;/div>
+      {recoverySent ? (
+        &lt;div className="recovery-success" role="status">
+          &lt;b>Revisa tu correo.&lt;/b>
+          &lt;span>Si la dirección está registrada, recibirás las instrucciones de recuperación.&lt;/span>
+        &lt;/div>
+      ) : (
+        &lt;form className="auth-form" onSubmit={onSubmit} noValidate>
+          &lt;Field label="Correo electrónico" name="email" type="email" placeholder="ejemplo@correo.com" value={form.email} onChange={onChange} onBlur={onBlur} error={emailError} required />
+          {error &amp;&amp; &lt;p className="form-error" role="alert">{error}&lt;/p>}
+          &lt;Button type="submit" className="auth-form__submit" disabled={busy}>
+            {busy ? 'Enviando...' : 'Enviar enlace de recuperación'}
+          &lt;/Button>
+        &lt;/form>
+      )}
+      &lt;p className="auth-switch">&lt;button type="button" onClick={onBack}>&lt;ArrowLeft size={15} /> Volver al inicio de sesión&lt;/button>&lt;/p>
+    &lt;/>
+  );
+}
+</code></pre>
+        </article>
+      </section>
+    </div>
+
+    <nav>
+      <h2><a href="index.html">Home</a></h2>
+      <h3>Global</h3>
+      <ul>
+        <li><a href="global.html#ActivitiesPage">ActivitiesPage</a></li>
+        <li><a href="global.html#AuthPage">AuthPage</a></li>
+        <li><a href="global.html#CompanyDashboard">CompanyDashboard</a></li>
+        <li>
+          <a href="global.html#CompanyPublicProfilePage"
+            >CompanyPublicProfilePage</a
+          >
+        </li>
+        <li><a href="global.html#Field">Field</a></li>
+        <li><a href="global.html#HistoryPage">HistoryPage</a></li>
+        <li><a href="global.html#ModalNuevaTarea">ModalNuevaTarea</a></li>
+        <li><a href="global.html#NewInitiativePage">NewInitiativePage</a></li>
+        <li><a href="global.html#NotificationsPage">NotificationsPage</a></li>
+        <li><a href="global.html#ProfilePage">ProfilePage</a></li>
+        <li><a href="global.html#companyInitiatives">companyInitiatives</a></li>
+        <li><a href="global.html#createNotification">createNotification</a></li>
+        <li><a href="global.html#ownProfile">ownProfile</a></li>
+        <li><a href="global.html#profileToForm">profileToForm</a></li>
+        <li>
+          <a href="global.html#serializeInitiative">serializeInitiative</a>
+        </li>
+      </ul>
+    </nav>
+
+    <br class="clear" />
+
+    <footer>
+      Documentation generated by
+      <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26
+      2026 03:10:54 GMT-0500 (hora estándar de Perú)
+    </footer>
+
+    <script>
+      prettyPrint();
+    </script>
+    <script src="scripts/linenumber.js"></script>
+  </body>
+</html>

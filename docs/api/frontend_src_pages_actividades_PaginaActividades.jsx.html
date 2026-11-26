@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: frontend/src/pages/actividades/PaginaActividades.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: frontend/src/pages/actividades/PaginaActividades.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { useEffect, useState } from 'react';
+import { CalendarDays, Users, Clock3, XCircle } from 'lucide-react';
+import { Loader } from '../../components/comunes/Cargador.jsx';
+import { EmptyState } from '../../components/comunes/EstadoVacio.jsx';
+import { Button } from '../../components/comunes/Boton.jsx'; // &lt;-- Importamos tu componente Button
+import { api } from '../../services/cliente-api.js';
+import { go } from '../../navigation/navegacion.js';
+
+/**
+ * Página que muestra las actividades a las que el voluntario se ha postulado.
+ *
+ * Obtiene las actividades desde la API al cargar el componente y muestra
+ * diferentes acciones según el estado de la postulación.
+ *
+ * @param {Object} props Propiedades del componente.
+ * @param {string} props.token Token de autenticación del usuario.
+ * @returns {JSX.Element} Interfaz de la página de actividades.
+ */
+
+export function ActivitiesPage({ token }) {
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  /**
+   * Carga las actividades del voluntario cuando el componente se monta
+   * o cuando cambia el token de autenticación.
+   */
+
+  useEffect(() => {
+    api.activities(token)
+      .then((response) => setActivities(response.activities))
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  return (
+    &lt;section className="workspace-content activities-page">
+      &lt;div className="page-title">
+        &lt;div>
+          &lt;p className="section-kicker">TU PARTICIPACIÓN&lt;/p>
+          &lt;h1>Mis actividades&lt;/h1>
+          &lt;p>Aquí aparecen todas las iniciativas a las que te has postulado.&lt;/p>
+        &lt;/div>
+      &lt;/div>
+
+      {loading ? (
+        &lt;Loader />
+      ) : activities.length ? (
+        &lt;div className="initiative-grid">
+          {activities.map((activity) => (
+            &lt;article className="company-initiative-card" key={activity.id}>
+              &lt;div className={`company-initiative-card__top cover--${activity.cover}`}>
+                &lt;span>{activity.category}&lt;/span>
+              &lt;/div>
+              &lt;div>
+                &lt;p className="company-label">Empresa: {activity.companyName}&lt;/p>
+                &lt;h3>{activity.title}&lt;/h3>
+                &lt;p>{activity.summary}&lt;/p>
+                &lt;div className="initiative-card__meta">
+                  &lt;span>&lt;CalendarDays size={15} />{activity.date}&lt;/span>
+                  &lt;span>&lt;Users size={15} />{activity.joinedCount}/{activity.quota}&lt;/span>
+                &lt;/div>
+
+                {/* Renderizado condicional del botón según el estado de la postulación */}
+                {activity.applicationStatus === 'accepted' ? (
+                  &lt;Button onClick={() => go(`/kanban/${activity.id}`)}>
+                    Ir al tablero
+                  &lt;/Button>
+                ) : activity.applicationStatus === 'pending' ? (
+                  &lt;Button variant="secondary" disabled>
+                    &lt;Clock3 size={16} /> Pendiente de aprobación
+                  &lt;/Button>
+                ) : activity.applicationStatus === 'rejected' ? (
+                  &lt;Button variant="secondary" disabled>
+                    &lt;XCircle size={16} /> Postulación rechazada
+                  &lt;/Button>
+                ) : null}
+              &lt;/div>
+            &lt;/article>
+          ))}
+        &lt;/div>
+      ) : (
+        &lt;EmptyState
+          title="Aún no tienes postulaciones"
+          text="Explora iniciativas y envía tu primera postulación."
+          action={() => go('/volunteer/explore')}
+          actionLabel="Explorar iniciativas"
+        />
+      )}
+    &lt;/section>
+  );
+}</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ActivitiesPage">ActivitiesPage</a></li><li><a href="global.html#AuthPage">AuthPage</a></li><li><a href="global.html#CompanyDashboard">CompanyDashboard</a></li><li><a href="global.html#CompanyPublicProfilePage">CompanyPublicProfilePage</a></li><li><a href="global.html#Field">Field</a></li><li><a href="global.html#HistoryPage">HistoryPage</a></li><li><a href="global.html#ModalNuevaTarea">ModalNuevaTarea</a></li><li><a href="global.html#NewInitiativePage">NewInitiativePage</a></li><li><a href="global.html#NotificationsPage">NotificationsPage</a></li><li><a href="global.html#ProfilePage">ProfilePage</a></li><li><a href="global.html#companyInitiatives">companyInitiatives</a></li><li><a href="global.html#createNotification">createNotification</a></li><li><a href="global.html#ownProfile">ownProfile</a></li><li><a href="global.html#profileToForm">profileToForm</a></li><li><a href="global.html#serializeInitiative">serializeInitiative</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 03:10:54 GMT-0500 (hora estándar de Perú)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: frontend/src/pages/notificaciones/PaginaNotificaciones.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: frontend/src/pages/notificaciones/PaginaNotificaciones.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { useEffect, useState } from 'react';
+import { Bell, CheckCheck, Clock3 } from 'lucide-react';
+import { Loader } from '../../components/comunes/Cargador.jsx';
+import { EmptyState } from '../../components/comunes/EstadoVacio.jsx';
+import { Button } from '../../components/comunes/Boton.jsx';
+import { api } from '../../services/cliente-api.js';
+import { go } from '../../navigation/navegacion.js';
+
+/**
+ * Centraliza las notificaciones persistentes del usuario autenticado.
+ * @param {{token: string, showNotice: Function}} props Token de acceso y emisor de avisos locales.
+ * @returns {JSX.Element} Bandeja de notificaciones con lectura masiva.
+ */
+export function NotificationsPage({ token, showNotice }) {
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.notifications(token)
+      .then(({ notifications: nextNotifications }) => setNotifications(nextNotifications))
+      .catch((requestError) => setError(requestError.message))
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  async function markAllRead() {
+    try {
+      await api.markNotificationsRead(token);
+      setNotifications((current) => current.map((notification) => ({ ...notification, read: true })));
+      showNotice({ text: 'Todas las notificaciones fueron marcadas como leídas.' });
+    } catch (requestError) {
+      showNotice({ type: 'error', text: requestError.message });
+    }
+  }
+
+  return (
+    &lt;section className="workspace-content notifications-page">
+      &lt;div className="page-title page-title--split">&lt;div>&lt;p className="section-kicker">CENTRO DE AVISOS&lt;/p>&lt;h1>Bandeja de notificaciones&lt;/h1>&lt;p>Consulta postulaciones, tareas e información relevante para tu cuenta.&lt;/p>&lt;/div>&lt;Button variant="secondary" icon={CheckCheck} onClick={markAllRead} disabled={!notifications.some((item) => !item.read)}>Marcar todas como leídas&lt;/Button>&lt;/div>
+      {loading ? &lt;Loader label="Cargando notificaciones..." /> : error ? &lt;EmptyState title="No pudimos cargar las notificaciones" text={error} /> : notifications.length ? &lt;div className="notifications-list">{notifications.map((item) => &lt;NotificationItem item={item} key={item.id} />)}&lt;/div> : &lt;EmptyState title="No tienes notificaciones" text="Aquí aparecerán los avisos sobre tus iniciativas y actividades." />}
+    &lt;/section>
+  );
+}
+
+function NotificationItem({ item }) {
+  return &lt;button type="button" className={`notification-row ${item.read ? '' : 'notification-row--unread'}`} onClick={() => go(item.destinationUrl || '/notifications')}>&lt;span>&lt;Bell size={20} />&lt;/span>&lt;div>&lt;header>&lt;b>{item.title}&lt;/b>{!item.read &amp;&amp; &lt;i>No leída&lt;/i>}&lt;/header>&lt;p>{item.message}&lt;/p>&lt;small>&lt;Clock3 size={13} />{formatDate(item.createdAt)}&lt;/small>&lt;/div>&lt;/button>;
+}
+
+function formatDate(value) {
+  if (!value) return 'Ahora';
+  return new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ActivitiesPage">ActivitiesPage</a></li><li><a href="global.html#AuthPage">AuthPage</a></li><li><a href="global.html#CompanyDashboard">CompanyDashboard</a></li><li><a href="global.html#CompanyPublicProfilePage">CompanyPublicProfilePage</a></li><li><a href="global.html#Field">Field</a></li><li><a href="global.html#HistoryPage">HistoryPage</a></li><li><a href="global.html#ModalNuevaTarea">ModalNuevaTarea</a></li><li><a href="global.html#NewInitiativePage">NewInitiativePage</a></li><li><a href="global.html#NotificationsPage">NotificationsPage</a></li><li><a href="global.html#ProfilePage">ProfilePage</a></li><li><a href="global.html#companyInitiatives">companyInitiatives</a></li><li><a href="global.html#createNotification">createNotification</a></li><li><a href="global.html#ownProfile">ownProfile</a></li><li><a href="global.html#profileToForm">profileToForm</a></li><li><a href="global.html#serializeInitiative">serializeInitiative</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 03:10:54 GMT-0500 (hora estándar de Perú)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

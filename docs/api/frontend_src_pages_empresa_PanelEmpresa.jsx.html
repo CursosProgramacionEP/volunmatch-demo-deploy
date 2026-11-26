@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: frontend/src/pages/empresa/PanelEmpresa.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: frontend/src/pages/empresa/PanelEmpresa.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>
+/**
+ * @file CompanyDashboard.jsx
+ * @description Panel principal de la empresa para gestionar iniciativas,
+ * revisar postulaciones y visualizar estadísticas del tablero.
+ */
+
+import { useEffect, useState } from 'react';
+import { Bell, CalendarDays, Check, CircleCheck, ClipboardList, LayoutDashboard, Plus, Users } from 'lucide-react';
+import { Loader } from '../../components/comunes/Cargador.jsx';
+import { EmptyState } from '../../components/comunes/EstadoVacio.jsx';
+import { Button } from '../../components/comunes/Boton.jsx';
+import { Stat } from '../../components/aplicacion/Estadistica.jsx';
+import { api } from '../../services/cliente-api.js';
+import { go } from '../../navigation/navegacion.js';
+
+/**
+ * Muestra el panel principal de la empresa.
+ *
+ * Obtiene las iniciativas, las postulaciones y las estadísticas desde
+ * el backend, permitiendo aceptar o rechazar postulaciones y acceder
+ * a la gestión de cada iniciativa.
+ *
+ * @param {Object} props Propiedades del componente.
+ * @param {string} props.token Token de autenticación de la empresa.
+ * @param {Function} props.showNotice Función que muestra mensajes de notificación.
+ * @returns {JSX.Element} Interfaz del panel de empresa.
+ */
+export function CompanyDashboard({ token, showNotice }) {
+  const [initiatives, setInitiatives] = useState([]);
+  const [applications, setApplications] = useState([]);
+  const [stats, setStats] = useState(null); // NUEVO: Estado para los contadores reales
+  const [loading, setLoading] = useState(true);
+
+/**
+   * Carga la información del panel de la empresa.
+   *
+   * Obtiene de forma simultánea las iniciativas, las postulaciones
+   * y las estadísticas desde el backend para actualizar la interfaz.
+   *
+   * @returns {void}
+   */
+
+
+  const load = () => {
+    setLoading(true);
+    // NUEVO: Ahora cargamos también el dashboard
+    Promise.all([
+      api.myInitiatives(token), 
+      api.applications(token),
+      api.dashboard(token) // &lt;--- Llamada a la nueva ruta del backend
+    ])
+      .then(([initiativeData, applicationData, dashboardData]) => {
+        setInitiatives(initiativeData.initiatives);
+        setApplications(applicationData.applications);
+        setStats(dashboardData.stats); // Guardamos los contadores del backend
+      })
+      .catch((error) => showNotice({ type: 'error', text: error.message }))
+      .finally(() => setLoading(false));
+  };
+
+   /**
+   * Ejecuta la carga inicial del panel cuando el componente se monta
+   * o cuando cambia el token de autenticación.
+   */
+
+  useEffect(load, [token]);
+  
+/**
+   * Responde una postulación de un voluntario.
+   *
+   * Envía al backend la decisión de aceptar o rechazar la solicitud,
+   * muestra una notificación y recarga los datos del panel.
+   *
+   * @param {number|string} id Identificador de la postulación.
+   * @param {"accepted"|"rejected"} status Estado que se asignará a la postulación.
+   * @returns {Promise&lt;void>} Promesa que finaliza cuando la respuesta es procesada.
+   */
+  async function respond(id, status) {
+    try {
+      await api.respondApplication(token, id, status);
+      showNotice({
+        text: status === 'accepted'
+          ? 'Postulación aceptada. El tablero ya está habilitado para el voluntario.'
+          : 'Postulación rechazada.',
+      });
+      load(); // Esto recarga los datos y actualiza los contadores automáticamente
+    } catch (error) {
+      showNotice({ type: 'error', text: error.message });
+    }
+  }
+
+  const pending = applications.filter((application) => application.status === 'pending');
+
+  return (
+    &lt;section className="workspace-content company-dashboard">
+      &lt;div className="page-title page-title--split">
+        &lt;div>
+          &lt;p className="section-kicker">PANEL DE EMPRESA&lt;/p>
+          &lt;h1>Mis iniciativas&lt;/h1>
+          &lt;p>Gestiona convocatorias y responde a las personas que quieren sumarse.&lt;/p>
+        &lt;/div>
+        &lt;Button onClick={() => go('/company/new')} icon={Plus}>Nueva iniciativa&lt;/Button>
+      &lt;/div>
+
+      &lt;div className="stats-grid">
+        {/* Usamos los datos del backend si están disponibles, si no, mostramos 0 */}
+        &lt;Stat 
+          icon={LayoutDashboard} 
+          label="Iniciativas" 
+          value={stats ? stats.totalInitiatives : initiatives.length} 
+        />
+        &lt;Stat 
+          icon={Users} 
+          label="Voluntarios aceptados" 
+          value={stats ? stats.acceptedVolunteers : 0} 
+        />
+        &lt;Stat 
+          icon={ClipboardList} 
+          label="Tareas creadas" 
+          value={stats ? stats.totalTasks : 0} 
+        />
+        &lt;Stat 
+          icon={Bell} 
+          label="Postulaciones por revisar" 
+          value={stats ? stats.pendingApplications : pending.length} 
+          highlight 
+        />
+      &lt;/div>
+
+      {loading ? (
+        &lt;Loader />
+      ) : (
+        &lt;>
+          &lt;section className="review-section">
+            &lt;div className="section-head">
+              &lt;div>
+                &lt;h2>Postulaciones recientes&lt;/h2>
+                &lt;p>Revisa cada solicitud para habilitar el acceso al tablero Kanban.&lt;/p>
+              &lt;/div>
+              &lt;span className="count-pill">{pending.length} pendientes&lt;/span>
+            &lt;/div>
+
+            {pending.length ? (
+              &lt;div className="application-list">
+                {pending.map((application) => (
+                  &lt;article className="application-row" key={application.id}>
+                    &lt;div className="avatar-large">
+                      {application.volunteer.fullName.split(' ').map((name) => name[0]).slice(0, 2).join('')}
+                    &lt;/div>
+                    &lt;div className="application-row__main">
+                      &lt;b>{application.volunteer.fullName}&lt;/b>
+                      &lt;span>{application.volunteer.email}&lt;/span>
+                      &lt;small>Postuló a &lt;strong>{application.initiative.title}&lt;/strong>&lt;/small>
+                    &lt;/div>
+                    &lt;div className="application-row__actions">
+                      &lt;Button variant="secondary" onClick={() => respond(application.id, 'rejected')}>Rechazar&lt;/Button>
+                      &lt;Button onClick={() => respond(application.id, 'accepted')} icon={Check}>Aceptar&lt;/Button>
+                    &lt;/div>
+                  &lt;/article>
+                ))}
+              &lt;/div>
+            ) : (
+              &lt;div className="empty-inline">
+                &lt;CircleCheck size={22} />
+                No hay postulaciones pendientes por revisar.
+              &lt;/div>
+            )}
+          &lt;/section>
+
+          &lt;section className="company-initiative-section">
+            &lt;div className="section-head">
+              &lt;div>
+                &lt;h2>Iniciativas publicadas&lt;/h2>
+                &lt;p>Abre una iniciativa para ver sus detalles y tareas.&lt;/p>
+              &lt;/div>
+            &lt;/div>
+
+            {initiatives.length ? (
+              &lt;div className="company-card-grid">
+                {initiatives.map((initiative) => (
+                  &lt;article className="company-initiative-card" key={initiative.id}>
+                    &lt;div className={`company-initiative-card__top cover--${initiative.cover}`}>
+                      &lt;span>{initiative.category}&lt;/span>
+                    &lt;/div>
+                    &lt;div>
+                      &lt;h3>{initiative.title}&lt;/h3>
+                      &lt;p>{initiative.summary}&lt;/p>
+                      &lt;div className="initiative-card__meta">
+                        &lt;span>&lt;CalendarDays size={15} />{initiative.date}&lt;/span>
+                        {/* NOTA: El cupo que se muestra viene de la BD, si aceptaste a alguien, debería reflejarse */}
+                        &lt;span>&lt;Users size={15} />{initiative.joinedCount}/{initiative.quota}&lt;/span>
+                      &lt;/div>
+                      &lt;Button variant="secondary" onClick={() => go(`/initiative/${initiative.id}`)}>Ver iniciativa&lt;/Button>
+                    &lt;/div>
+                  &lt;/article>
+                ))}
+              &lt;/div>
+            ) : (
+              &lt;EmptyState
+                title="Todavía no has creado iniciativas"
+                text="Publica la primera convocatoria para recibir postulaciones."
+                action={() => go('/company/new')}
+                actionLabel="Crear iniciativa"
+              />
+            )}
+          &lt;/section>
+        &lt;/>
+      )}
+    &lt;/section>
+  );
+}</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ActivitiesPage">ActivitiesPage</a></li><li><a href="global.html#AuthPage">AuthPage</a></li><li><a href="global.html#CompanyDashboard">CompanyDashboard</a></li><li><a href="global.html#CompanyPublicProfilePage">CompanyPublicProfilePage</a></li><li><a href="global.html#Field">Field</a></li><li><a href="global.html#HistoryPage">HistoryPage</a></li><li><a href="global.html#ModalNuevaTarea">ModalNuevaTarea</a></li><li><a href="global.html#NewInitiativePage">NewInitiativePage</a></li><li><a href="global.html#NotificationsPage">NotificationsPage</a></li><li><a href="global.html#ProfilePage">ProfilePage</a></li><li><a href="global.html#companyInitiatives">companyInitiatives</a></li><li><a href="global.html#createNotification">createNotification</a></li><li><a href="global.html#ownProfile">ownProfile</a></li><li><a href="global.html#profileToForm">profileToForm</a></li><li><a href="global.html#serializeInitiative">serializeInitiative</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 03:10:54 GMT-0500 (hora estándar de Perú)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

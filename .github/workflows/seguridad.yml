@@ -1,0 +1,41 @@
+name: Seguridad
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  codigo: # análisis estático (Semgrep)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+      - name: Ejecutar Semgrep
+        run: semgrep scan --config auto --error
+
+  secretos: # todo el historial (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
+      - name: Ejecutar Gitleaks
+        run: |
+          docker run -v "$PWD:/repo" \
+            ghcr.io/gitleaks/gitleaks:latest git /repo
+  dependencias: # Auditoría de dependencias (SCA)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+      - name: Ejecutar auditoría de seguridad
+        run: pnpm audit --audit-level=high  

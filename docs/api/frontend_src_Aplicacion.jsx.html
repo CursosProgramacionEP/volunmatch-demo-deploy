@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: frontend/src/Aplicacion.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: frontend/src/Aplicacion.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { useEffect, useMemo, useState } from 'react';
+import { Notice } from './components/comunes/Aviso.jsx';
+import { AppLayout } from './components/aplicacion/EstructuraAplicacion.jsx';
+import { HomePage } from './pages/inicio/PaginaInicio.jsx';
+import { AuthPage } from './pages/autenticacion/PaginaAutenticacion.jsx';
+import { ExplorePage } from './pages/exploracion/PaginaExploracion.jsx';
+import { InitiativeDetailPage } from './pages/iniciativas/PaginaDetalleIniciativa.jsx';
+import { ActivitiesPage } from './pages/actividades/PaginaActividades.jsx';
+import { CompanyDashboard } from './pages/empresa/PanelEmpresa.jsx';
+import { NewInitiativePage } from './pages/iniciativas/PaginaNuevaIniciativa.jsx';
+import { KanbanPage } from './pages/tablero/PaginaTablero.jsx';
+import { ProfilePage, CompanyPublicProfilePage } from './pages/perfil/PaginaPerfil.jsx';
+import { HistoryPage } from './pages/historial/PaginaHistorial.jsx';
+import { NotificationsPage } from './pages/notificaciones/PaginaNotificaciones.jsx';
+import { go, useRoute } from './navigation/navegacion.js';
+
+// Componente raíz de la aplicación.
+// Se encarga de tres cosas:
+//   1) Guardar la sesión (usuario + token) en localStorage.
+//   2) Decidir, según la ruta actual y si hay sesión, qué pantalla mostrar.
+//   3) Mostrar el aviso flotante (Notice) por encima de cualquier pantalla.
+export default function App() {
+  const route = useRoute();
+  const [session, setSession] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('volunmatch-session') || 'null');
+    } catch {
+      return null;
+    }
+  });
+  const [notice, setNotice] = useState(null);
+
+  const user = session?.user;
+  const token = session?.token;
+  const showNotice = (item) => setNotice(item);
+
+  // Extrae el id de la iniciativa desde rutas como "/initiative/123" o "/kanban/123".
+  const routeParts = useMemo(() => route.split('/').filter(Boolean), [route]);
+  const initiativeId = routeParts[0] === 'initiative' || routeParts[0] === 'kanban' ? routeParts[1] : null;
+  const companyId = routeParts[0] === 'company' &amp;&amp; routeParts[1] === 'profile' ? routeParts[2] : null;
+
+  // Si no hay sesión y el usuario intenta ver una pantalla protegida, lo mandamos a /auth.
+  useEffect(() => {
+    if (!user &amp;&amp; route !== '/' &amp;&amp; route !== '/auth') go('/auth');
+  }, [route, user]);
+
+  function onAuthenticated(nextSession) {
+    localStorage.setItem('volunmatch-session', JSON.stringify(nextSession));
+    setSession(nextSession);
+  }
+
+  /** Actualiza el usuario guardado cuando el perfil se modifica correctamente. */
+  function onSessionUpdated(profile) {
+    setSession((current) => {
+      const nextUser = {
+        ...current.user,
+        fullName: profile.role === 'company' ? profile.companyName : profile.fullName,
+        email: profile.email,
+      };
+      const nextSession = { ...current, user: nextUser };
+      localStorage.setItem('volunmatch-session', JSON.stringify(nextSession));
+      return nextSession;
+    });
+  }
+
+  let content;
+
+  if (!user) {
+    // Sin sesión: solo se puede ver el inicio o la pantalla de acceso.
+    content = route === '/' ? &lt;HomePage user={null} /> : &lt;AuthPage onAuthenticated={onAuthenticated} showNotice={showNotice} />;
+  } else if (route === '/') {
+    content = &lt;HomePage user={user} />;
+  } else {
+    // Con sesión: se elige la pantalla según la ruta y el rol del usuario.
+    let page;
+    if (route.startsWith('/initiative/')) {
+      page = &lt;InitiativeDetailPage token={token} user={user} initiativeId={initiativeId} showNotice={showNotice} />;
+    } else if (route.startsWith('/kanban/')) {
+      page = &lt;KanbanPage token={token} user={user} initiativeId={initiativeId} showNotice={showNotice} />;
+    } else if (route === '/profile') {
+      page = &lt;ProfilePage token={token} user={user} showNotice={showNotice} onSessionUpdated={onSessionUpdated} />;
+    } else if (companyId &amp;&amp; user.role === 'volunteer') {
+      page = &lt;CompanyPublicProfilePage token={token} companyId={companyId} />;
+    } else if (route === '/notifications') {
+      page = &lt;NotificationsPage token={token} showNotice={showNotice} />;
+    } else if (route === '/company/history' || route === '/volunteer/history') {
+      page = &lt;HistoryPage token={token} user={user} />;
+    } else if (user.role === 'company' &amp;&amp; route === '/company/new') {
+      page = &lt;NewInitiativePage token={token} showNotice={showNotice} />;
+    } else if (user.role === 'company') {
+      page = &lt;CompanyDashboard token={token} showNotice={showNotice} />;
+    } else if (route === '/volunteer/activities') {
+      page = &lt;ActivitiesPage token={token} />;
+    } else {
+      page = (
+        &lt;ExplorePage
+          token={token}
+          onOpen={(initiative) => go(initiative.isMember || initiative.applicationStatus === 'accepted' ? `/kanban/${initiative.id}` : `/initiative/${initiative.id}`)}
+          showNotice={showNotice}
+        />
+      );
+    }
+    content = &lt;AppLayout user={user} route={route} token={token}>{page}&lt;/AppLayout>;
+  }
+
+  return (
+    &lt;>
+      {content}
+      &lt;Notice notice={notice} onClose={() => setNotice(null)} />
+    &lt;/>
+  );
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ActivitiesPage">ActivitiesPage</a></li><li><a href="global.html#AuthPage">AuthPage</a></li><li><a href="global.html#CompanyDashboard">CompanyDashboard</a></li><li><a href="global.html#CompanyPublicProfilePage">CompanyPublicProfilePage</a></li><li><a href="global.html#Field">Field</a></li><li><a href="global.html#HistoryPage">HistoryPage</a></li><li><a href="global.html#ModalNuevaTarea">ModalNuevaTarea</a></li><li><a href="global.html#NewInitiativePage">NewInitiativePage</a></li><li><a href="global.html#NotificationsPage">NotificationsPage</a></li><li><a href="global.html#ProfilePage">ProfilePage</a></li><li><a href="global.html#companyInitiatives">companyInitiatives</a></li><li><a href="global.html#createNotification">createNotification</a></li><li><a href="global.html#ownProfile">ownProfile</a></li><li><a href="global.html#profileToForm">profileToForm</a></li><li><a href="global.html#serializeInitiative">serializeInitiative</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 03:10:54 GMT-0500 (hora estándar de Perú)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: frontend/src/pages/perfil/PaginaPerfil.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: frontend/src/pages/perfil/PaginaPerfil.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { useEffect, useState } from 'react';
+import { Award, Building2, CalendarDays, CheckCircle2, Edit3, Mail, Phone, Plus, Save, UserRound, Users } from 'lucide-react';
+import { Loader } from '../../components/comunes/Cargador.jsx';
+import { EmptyState } from '../../components/comunes/EstadoVacio.jsx';
+import { Button } from '../../components/comunes/Boton.jsx';
+import { Field } from '../../components/comunes/Campo.jsx';
+import { api } from '../../services/cliente-api.js';
+import { go } from '../../navigation/navegacion.js';
+import { categories } from '../../constants/aplicacion.js';
+
+const blankCertification = { title: '', issuer: '', issuedAt: '', documentUrl: '' };
+
+/**
+ * Muestra y permite actualizar el perfil del usuario que inició sesión.
+ * @param {object} props Propiedades de sesión, avisos y actualización local de usuario.
+ * @returns {JSX.Element} Perfil personal o institucional.
+ */
+export function ProfilePage({ token, user, showNotice, onSessionUpdated }) {
+  const [profile, setProfile] = useState(null);
+  const [form, setForm] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [addingCertification, setAddingCertification] = useState(false);
+  const [certification, setCertification] = useState(blankCertification);
+
+  useEffect(() => {
+    let active = true;
+    api.myProfile(token)
+      .then(({ profile: nextProfile }) => {
+        if (!active) return;
+        setProfile(nextProfile);
+        setForm(profileToForm(nextProfile));
+      })
+      .catch((requestError) => active &amp;&amp; setError(requestError.message))
+      .finally(() => active &amp;&amp; setLoading(false));
+    return () => { active = false; };
+  }, [token]);
+
+  function updateForm(event) {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+    setError('');
+  }
+
+  async function saveProfile(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const response = await api.updateMyProfile(token, form);
+      setProfile(response.profile);
+      setForm(profileToForm(response.profile));
+      setEditing(false);
+      onSessionUpdated(response.profile);
+      showNotice({ text: 'Cambios guardados correctamente.' });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveCertification(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const response = await api.addCertification(token, certification);
+      setProfile((current) => ({ ...current, certifications: [response.certification, ...current.certifications] }));
+      setCertification(blankCertification);
+      setAddingCertification(false);
+      showNotice({ text: 'Certificación agregada correctamente.' });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return &lt;section className="workspace-content">&lt;Loader label="Cargando perfil..." />&lt;/section>;
+  if (error &amp;&amp; !profile) return &lt;section className="workspace-content">&lt;EmptyState title="No pudimos cargar tu perfil" text={error} />&lt;/section>;
+
+  return (
+    &lt;section className="workspace-content profile-page">
+      &lt;ProfileHeader profile={profile} editable onEdit={() => setEditing((open) => !open)} />
+      {editing ? (
+        &lt;ProfileForm
+          profile={profile}
+          form={form}
+          error={error}
+          saving={saving}
+          onChange={updateForm}
+          onCancel={() => { setEditing(false); setForm(profileToForm(profile)); setError(''); }}
+          onSubmit={saveProfile}
+        />
+      ) : (
+        &lt;ProfileContent
+          profile={profile}
+          showCertifications={profile.role === 'volunteer'}
+          addingCertification={addingCertification}
+          certification={certification}
+          error={error}
+          saving={saving}
+          onAddCertification={() => setAddingCertification(true)}
+          onCancelCertification={() => { setAddingCertification(false); setCertification(blankCertification); setError(''); }}
+          onCertificationChange={(event) => setCertification((current) => ({ ...current, [event.target.name]: event.target.value }))}
+          onCertificationSubmit={saveCertification}
+        />
+      )}
+    &lt;/section>
+  );
+}
+
+/**
+ * Presenta a los voluntarios el perfil institucional de una empresa y sus iniciativas activas.
+ * @param {{token: string, companyId: string}} props Datos de sesión e identificador de empresa.
+ * @returns {JSX.Element} Perfil institucional de consulta.
+ */
+export function CompanyPublicProfilePage({ token, companyId }) {
+  const [profile, setProfile] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.companyProfile(token, companyId)
+      .then(({ profile: nextProfile }) => setProfile(nextProfile))
+      .catch((requestError) => setError(requestError.message));
+  }, [token, companyId]);
+
+  if (!profile &amp;&amp; !error) return &lt;section className="workspace-content">&lt;Loader label="Cargando perfil de empresa..." />&lt;/section>;
+  if (error) return &lt;section className="workspace-content">&lt;EmptyState title="No pudimos abrir este perfil" text={error} action={() => go('/volunteer/explore')} actionLabel="Volver a explorar" />&lt;/section>;
+
+  return (
+    &lt;section className="workspace-content profile-page">
+      &lt;ProfileHeader profile={profile} />
+      &lt;ProfileContent profile={profile} />
+    &lt;/section>
+  );
+}
+
+/** @returns {object} Valores editables derivados del perfil recibido por la API. */
+function profileToForm(profile) {
+  return profile.role === 'volunteer'
+    ? { fullName: profile.fullName, email: profile.email, phone: profile.phone, bio: profile.bio }
+    : { companyName: profile.companyName, contactName: profile.contactName, email: profile.email, sector: profile.sector };
+}
+
+function ProfileHeader({ profile, editable = false, onEdit }) {
+  const name = profile.role === 'company' ? profile.companyName : profile.fullName;
+  return (
+    &lt;header className="profile-hero">
+      &lt;span className="profile-hero__avatar">{name.split(' ').map((part) => part[0]).slice(0, 2).join('')}&lt;/span>
+      &lt;div>
+        &lt;p className="section-kicker">{profile.role === 'company' ? 'PERFIL INSTITUCIONAL' : 'PERFIL DE VOLUNTARIO'}&lt;/p>
+        &lt;h1>{name}&lt;/h1>
+        &lt;p>{profile.role === 'company' ? `${profile.sector} · Organización verificada` : 'Tu información de contacto y trayectoria de voluntariado.'}&lt;/p>
+      &lt;/div>
+      {editable &amp;&amp; &lt;Button className="profile-hero__edit" icon={Edit3} onClick={onEdit}>Editar perfil&lt;/Button>}
+    &lt;/header>
+  );
+}
+
+function ProfileContent({ profile, showCertifications = false, addingCertification, certification, error, saving, onAddCertification, onCancelCertification, onCertificationChange, onCertificationSubmit }) {
+  if (profile.role === 'company') return &lt;CompanyProfileContent profile={profile} />;
+
+  return (
+    &lt;div className="profile-layout">
+      &lt;section className="profile-card profile-card--main">
+        &lt;h2>&lt;UserRound size={20} /> Información de contacto&lt;/h2>
+        &lt;div className="profile-details">
+          &lt;span>&lt;Mail size={17} />{profile.email}&lt;/span>
+          &lt;span>&lt;Phone size={17} />{profile.phone || 'Teléfono sin registrar'}&lt;/span>
+          &lt;span>&lt;CalendarDays size={17} />Miembro desde {formatDate(profile.createdAt)}&lt;/span>
+        &lt;/div>
+        &lt;h3>Sobre mí&lt;/h3>
+        &lt;p>{profile.bio || 'Aún no has agregado una descripción personal.'}&lt;/p>
+      &lt;/section>
+      &lt;section className="profile-stats">
+        &lt;Metric icon={Users} value={profile.acceptedInitiatives} label="Iniciativas aceptadas" />
+        &lt;Metric icon={CheckCircle2} value={profile.completedTasks} label="Tareas completadas" />
+      &lt;/section>
+      {showCertifications &amp;&amp; (
+        &lt;section className="profile-card profile-card--main certifications-card">
+          &lt;div className="profile-section-head">
+            &lt;div>&lt;h2>&lt;Award size={20} /> Certificaciones&lt;/h2>&lt;p>Registra los certificados que acreditan tu participación.&lt;/p>&lt;/div>
+            &lt;Button variant="secondary" icon={Plus} onClick={onAddCertification}>Agregar&lt;/Button>
+          &lt;/div>
+          {addingCertification &amp;&amp; &lt;CertificationForm certification={certification} error={error} saving={saving} onChange={onCertificationChange} onCancel={onCancelCertification} onSubmit={onCertificationSubmit} />}
+          {profile.certifications.length ? (
+            &lt;div className="certification-list">
+              {profile.certifications.map((item) => &lt;CertificationItem key={item.id} item={item} />)}
+            &lt;/div>
+          ) : !addingCertification &amp;&amp; &lt;p className="profile-empty">Aún no registraste certificaciones.&lt;/p>}
+        &lt;/section>
+      )}
+    &lt;/div>
+  );
+}
+
+function CompanyProfileContent({ profile }) {
+  return (
+    &lt;div className="profile-layout">
+      &lt;section className="profile-card profile-card--main">
+        &lt;h2>&lt;Building2 size={20} /> Datos de la organización&lt;/h2>
+        &lt;div className="profile-details">
+          &lt;span>&lt;Mail size={17} />{profile.email}&lt;/span>
+          &lt;span>&lt;UserRound size={17} />Responsable: {profile.contactName}&lt;/span>
+          &lt;span>&lt;CheckCircle2 size={17} />RUC: {profile.ruc}&lt;/span>
+        &lt;/div>
+      &lt;/section>
+      &lt;section className="profile-card profile-card--main company-profile-initiatives">
+        &lt;div className="profile-section-head">&lt;div>&lt;h2>&lt;Users size={20} /> Iniciativas publicadas&lt;/h2>&lt;p>Convocatorias vinculadas a esta organización.&lt;/p>&lt;/div>&lt;/div>
+        {profile.initiatives.length ? (
+          &lt;div className="profile-initiative-list">
+            {profile.initiatives.map((initiative) => (
+              &lt;article key={initiative.id}>
+                &lt;span className="category-chip">{initiative.category}&lt;/span>
+                &lt;div>&lt;h3>{initiative.title}&lt;/h3>&lt;p>{initiative.summary}&lt;/p>&lt;small>&lt;CalendarDays size={14} /> {formatDate(initiative.date)} · {initiative.location}&lt;/small>&lt;/div>
+                &lt;Button variant="secondary" onClick={() => go(`/initiative/${initiative.id}`)}>Ver iniciativa&lt;/Button>
+              &lt;/article>
+            ))}
+          &lt;/div>
+        ) : &lt;p className="profile-empty">No hay iniciativas activas para mostrar.&lt;/p>}
+      &lt;/section>
+    &lt;/div>
+  );
+}
+
+function ProfileForm({ profile, form, error, saving, onChange, onCancel, onSubmit }) {
+  const volunteer = profile.role === 'volunteer';
+  return (
+    &lt;form className="profile-card profile-form" onSubmit={onSubmit} noValidate>
+      &lt;h2>{volunteer ? 'Editar datos personales' : 'Editar datos de empresa'}&lt;/h2>
+      {volunteer ? (
+        &lt;>
+          &lt;Field label="Nombre y apellidos" name="fullName" value={form.fullName} onChange={onChange} required />
+          &lt;div className="form-grid">&lt;Field label="Correo electrónico" name="email" type="email" value={form.email} onChange={onChange} required />&lt;Field label="Teléfono" name="phone" value={form.phone} onChange={onChange} />&lt;/div>
+          &lt;Field label="Biografía" name="bio" as="textarea" value={form.bio} onChange={onChange} />
+        &lt;/>
+      ) : (
+        &lt;>
+          &lt;div className="form-grid">&lt;Field label="Nombre de empresa" name="companyName" value={form.companyName} onChange={onChange} required />&lt;Field label="Responsable" name="contactName" value={form.contactName} onChange={onChange} required />&lt;/div>
+          &lt;div className="form-grid">&lt;Field label="Correo corporativo" name="email" type="email" value={form.email} onChange={onChange} required />&lt;Field label="Sector" name="sector" as="select" value={form.sector} onChange={onChange} options={categories.slice(1).concat('Otro')} required />&lt;/div>
+        &lt;/>
+      )}
+      {error &amp;&amp; &lt;p className="form-error" role="alert">{error}&lt;/p>}
+      &lt;footer className="form-footer">&lt;Button type="button" variant="secondary" onClick={onCancel}>Cancelar&lt;/Button>&lt;Button type="submit" icon={Save} disabled={saving}>{saving ? 'Guardando...' : 'Guardar cambios'}&lt;/Button>&lt;/footer>
+    &lt;/form>
+  );
+}
+
+function CertificationForm({ certification, error, saving, onChange, onCancel, onSubmit }) {
+  return (
+    &lt;form className="certification-form" onSubmit={onSubmit} noValidate>
+      &lt;div className="form-grid">&lt;Field label="Nombre de la certificación" name="title" value={certification.title} onChange={onChange} required />&lt;Field label="Entidad emisora" name="issuer" value={certification.issuer} onChange={onChange} required />&lt;/div>
+      &lt;div className="form-grid">&lt;Field label="Fecha de emisión" name="issuedAt" type="date" value={certification.issuedAt} onChange={onChange} />&lt;Field label="Enlace al documento" name="documentUrl" type="url" placeholder="https://..." value={certification.documentUrl} onChange={onChange} />&lt;/div>
+      {error &amp;&amp; &lt;p className="form-error" role="alert">{error}&lt;/p>}
+      &lt;footer className="form-footer">&lt;Button type="button" variant="secondary" onClick={onCancel}>Cancelar&lt;/Button>&lt;Button type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Guardar certificación'}&lt;/Button>&lt;/footer>
+    &lt;/form>
+  );
+}
+
+function CertificationItem({ item }) {
+  return &lt;article>&lt;span className="certification-icon">&lt;Award size={18} />&lt;/span>&lt;div>&lt;b>{item.title}&lt;/b>&lt;small>{item.issuer} · {formatDate(item.issuedAt)}&lt;/small>&lt;/div>{item.documentUrl &amp;&amp; &lt;a href={item.documentUrl} target="_blank" rel="noreferrer">Ver documento&lt;/a>}&lt;/article>;
+}
+
+function Metric({ icon: Icon, value, label }) {
+  return &lt;article>&lt;span>&lt;Icon size={20} />&lt;/span>&lt;div>&lt;b>{value}&lt;/b>&lt;small>{label}&lt;/small>&lt;/div>&lt;/article>;
+}
+
+function formatDate(value) {
+  if (!value) return 'Fecha por definir';
+  return new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ActivitiesPage">ActivitiesPage</a></li><li><a href="global.html#AuthPage">AuthPage</a></li><li><a href="global.html#CompanyDashboard">CompanyDashboard</a></li><li><a href="global.html#CompanyPublicProfilePage">CompanyPublicProfilePage</a></li><li><a href="global.html#Field">Field</a></li><li><a href="global.html#HistoryPage">HistoryPage</a></li><li><a href="global.html#ModalNuevaTarea">ModalNuevaTarea</a></li><li><a href="global.html#NewInitiativePage">NewInitiativePage</a></li><li><a href="global.html#NotificationsPage">NotificationsPage</a></li><li><a href="global.html#ProfilePage">ProfilePage</a></li><li><a href="global.html#companyInitiatives">companyInitiatives</a></li><li><a href="global.html#createNotification">createNotification</a></li><li><a href="global.html#ownProfile">ownProfile</a></li><li><a href="global.html#profileToForm">profileToForm</a></li><li><a href="global.html#serializeInitiative">serializeInitiative</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 03:10:54 GMT-0500 (hora estándar de Perú)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

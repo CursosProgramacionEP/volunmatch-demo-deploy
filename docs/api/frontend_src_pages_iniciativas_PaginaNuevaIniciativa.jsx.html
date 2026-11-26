@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: frontend/src/pages/iniciativas/PaginaNuevaIniciativa.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: frontend/src/pages/iniciativas/PaginaNuevaIniciativa.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { useState } from "react";
+import { ArrowLeft, Plus, Send, X, Calendar } from "lucide-react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { es } from "date-fns/locale";
+import { Button } from "../../components/comunes/Boton.jsx";
+import { Field } from "../../components/comunes/Campo.jsx";
+import { api } from "../../services/cliente-api.js";
+import { go } from "../../navigation/navegacion.js";
+import { categories } from "../../constants/aplicacion.js";
+
+function emptyTask() {
+  return { title: "", description: "", area: "General", priority: "Media" };
+}
+
+// Convierte un Date a string ISO para enviar al backend
+function toISOString(date) {
+  if (!date) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * Valida y publica una iniciativa, mostrando errores directamente en cada campo.
+ * @param {{token: string, showNotice: Function}} props Sesión de empresa y emisor de avisos.
+ * @returns {JSX.Element} Formulario de creación de iniciativa.
+ */
+export function NewInitiativePage({ token, showNotice }) {
+  const [form, setForm] = useState({
+    title: "",
+    category: "Medio ambiente",
+    summary: "",
+    date: "",
+    endDate: "",
+    location: "",
+    quota: "",
+    requirements: ["Mayor de 18 años"],
+    tasks: [emptyTask()],
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [errors, setErrors] = useState({});
+
+  const update = (event) => {
+    const { name, value } = event.target;
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+    setErrors((current) => ({ ...current, [name]: "" }));
+    setError("");
+  };
+
+  const updateTask = (index, field, value) =>
+    setForm((current) => ({
+      ...current,
+      tasks: current.tasks.map((task, taskIndex) =>
+        taskIndex === index ? { ...task, [field]: value } : task,
+      ),
+    }));
+
+  const updateRequirement = (index, value) =>
+    setForm((current) => ({
+      ...current,
+      requirements: current.requirements.map((item, itemIndex) =>
+        itemIndex === index ? value : item,
+      ),
+    }));
+
+  const addRequirement = () =>
+    setForm((current) => ({
+      ...current,
+      requirements: [...current.requirements, ""],
+    }));
+
+  const removeRequirement = (index) =>
+    setForm((current) => ({
+      ...current,
+      requirements: current.requirements.filter(
+        (_item, itemIndex) => itemIndex !== index,
+      ),
+    }));
+
+  const addTask = () =>
+    setForm((current) => ({
+      ...current,
+      tasks: [...current.tasks, emptyTask()],
+    }));
+
+  const removeTask = (index) =>
+    setForm((current) => ({
+      ...current,
+      tasks: current.tasks.filter((_task, taskIndex) => taskIndex !== index),
+    }));
+
+  function validate() {
+    const nextErrors = {};
+    const title = form.title.trim();
+    const onlyLetters = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]{3,250}$/;
+    if (!title) nextErrors.title = "El nombre de la iniciativa es obligatorio.";
+    else if (!onlyLetters.test(title)) nextErrors.title = "Usa al menos 3 letras, sin números ni símbolos.";
+    if (!form.summary.trim()) nextErrors.summary = "Describe el objetivo de la iniciativa.";
+    if (!form.location.trim()) nextErrors.location = "Indica el lugar de la actividad.";
+    if (!form.quota) nextErrors.quota = "Indica el cupo de voluntarios.";
+    else if (!Number.isInteger(Number(form.quota)) || Number(form.quota) &lt;= 0) nextErrors.quota = "El cupo debe ser un número entero mayor que cero.";
+    if (!form.date) nextErrors.date = "Selecciona la fecha de inicio.";
+    if (!form.endDate) nextErrors.endDate = "Selecciona la fecha de fin.";
+    if (form.date &amp;&amp; form.endDate &amp;&amp; form.endDate &lt; form.date) nextErrors.endDate = "La fecha de fin debe ser igual o posterior a la de inicio.";
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!validate()) {
+      setError("Revisa los campos marcados antes de publicar la iniciativa.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      // Convertir fechas a string ISO antes de enviar
+      const payload = {
+        ...form,
+        date: toISOString(form.date),
+        endDate: toISOString(form.endDate),
+      };
+      const response = await api.createInitiative(token, payload);
+      showNotice({ text: "Iniciativa publicada correctamente." });
+      go(`/initiative/${response.initiative.id}`);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    &lt;section className="workspace-content new-initiative">
+      &lt;button className="back-link" onClick={() => go("/company/dashboard")}>
+        &lt;ArrowLeft size={18} /> Volver a mis iniciativas
+      &lt;/button>
+
+      &lt;div className="form-page-head">
+        &lt;p className="section-kicker">NUEVA CONVOCATORIA&lt;/p>
+        &lt;h1>Publica una iniciativa&lt;/h1>
+        &lt;p>
+          Completa la información esencial y añade tareas iniciales para
+          organizar el trabajo desde el primer día.
+        &lt;/p>
+      &lt;/div>
+
+      &lt;form className="initiative-form" onSubmit={submit} noValidate>
+        &lt;section>
+          &lt;h2>Información de la iniciativa&lt;/h2>
+          &lt;Field
+            label="Nombre de la iniciativa"
+            name="title"
+            placeholder="Ej. Jornada de limpieza comunitaria"
+            value={form.title}
+            onChange={update}
+            error={errors.title}
+            required
+          />
+          &lt;div className="form-grid">
+            &lt;Field
+              label="Categoría"
+              name="category"
+              as="select"
+              value={form.category}
+              onChange={update}
+              options={categories.slice(1)}
+              required
+            />
+            &lt;Field
+              label="Cupo de voluntarios"
+              name="quota"
+              type="number"
+              min="1"
+              placeholder="Ej. 25"
+              value={form.quota}
+              onChange={update}
+              error={errors.quota}
+              required
+            />
+          &lt;/div>
+          &lt;Field
+            label="Objetivo y descripción"
+            name="summary"
+            as="textarea"
+            placeholder="Describe el propósito de la iniciativa y lo que se espera de los voluntarios."
+            value={form.summary}
+            onChange={update}
+            error={errors.summary}
+            required
+          />
+
+          &lt;h2 style={{ marginTop: 24, marginBottom: 4 }}>Fecha&lt;/h2>
+          &lt;p style={{ color: "#666", fontSize: 14, marginBottom: 16 }}>
+            Indica el inicio y fin de la iniciativa.
+          &lt;/p>
+
+          &lt;div className="form-grid">
+            &lt;label className={`field ${errors.date ? "field--invalid" : ""}`}>
+              &lt;span>Inicio de la iniciativa &lt;em aria-hidden="true">*&lt;/em>&lt;/span>
+              &lt;div className="datepicker-wrapper">
+                &lt;Calendar size={16} className="datepicker-icon" />
+                &lt;DatePicker
+                  selected={form.date ? new Date(form.date) : null}
+                  onChange={(date) => {
+                    setForm((current) => ({ ...current, date }));
+                    setErrors((current) => ({ ...current, date: "" }));
+                  }}
+                  dateFormat="dd/MM/yyyy"
+                  locale={es}
+                  placeholderText="Selecciona la fecha"
+                  className={`datepicker-input ${errors.date ? "input-error" : ""}`}
+                  required
+                />
+              &lt;/div>
+              {errors.date &amp;&amp; &lt;small className="field-error" role="alert">{errors.date}&lt;/small>}
+            &lt;/label>
+            &lt;label className={`field ${errors.endDate ? "field--invalid" : ""}`}>
+              &lt;span>Fin de la iniciativa &lt;em aria-hidden="true">*&lt;/em>&lt;/span>
+              &lt;div className="datepicker-wrapper">
+                &lt;Calendar size={16} className="datepicker-icon" />
+                &lt;DatePicker
+                  selected={form.endDate ? new Date(form.endDate) : null}
+                  onChange={(date) => {
+                    setForm((current) => ({ ...current, endDate: date }));
+                    setErrors((current) => ({ ...current, endDate: "" }));
+                  }}
+                  dateFormat="dd/MM/yyyy"
+                  locale={es}
+                  placeholderText="Selecciona la fecha"
+                  className={`datepicker-input ${errors.endDate ? "input-error" : ""}`}
+                  required
+                />
+              &lt;/div>
+              {errors.endDate &amp;&amp; &lt;small className="field-error" role="alert">{errors.endDate}&lt;/small>}
+            &lt;/label>
+          &lt;/div>
+
+          &lt;Field
+            label="Lugar"
+            name="location"
+            placeholder="Ej. Parque Zonal, distrito"
+            value={form.location}
+            onChange={update}
+            error={errors.location}
+            required
+          />
+        &lt;/section>
+
+        &lt;section>
+          &lt;div className="form-section-head">
+            &lt;div>
+              &lt;h2>Requisitos&lt;/h2>
+              &lt;p>Indica lo que debe conocer o llevar el voluntario.&lt;/p>
+            &lt;/div>
+            &lt;button type="button" className="add-link" onClick={addRequirement}>
+              &lt;Plus size={16} />
+              Agregar requisito
+            &lt;/button>
+          &lt;/div>
+          {form.requirements.map((requirement, index) => (
+            &lt;div className="editable-row" key={`requirement-${index}`}>
+              &lt;input
+                value={requirement}
+                onChange={(event) =>
+                  updateRequirement(index, event.target.value)
+                }
+                placeholder="Ej. Disponibilidad de 4 horas"
+              />
+              &lt;button
+                type="button"
+                aria-label="Eliminar requisito"
+                onClick={() => removeRequirement(index)}
+              >
+                &lt;X size={16} />
+              &lt;/button>
+            &lt;/div>
+          ))}
+        &lt;/section>
+
+        &lt;section>
+          &lt;div className="form-section-head">
+            &lt;div>
+              &lt;h2>Tareas iniciales&lt;/h2>
+              &lt;p>
+                Los voluntarios aceptados podrán tomarlas y moverlas en el
+                tablero.
+              &lt;/p>
+            &lt;/div>
+            &lt;button type="button" className="add-link" onClick={addTask}>
+              &lt;Plus size={16} />
+              Agregar tarea
+            &lt;/button>
+          &lt;/div>
+          {form.tasks.map((task, index) => (
+            &lt;div className="task-editor" key={`task-${index}`}>
+              &lt;div className="task-editor__head">
+                &lt;span>Tarea {index + 1}&lt;/span>
+                {form.tasks.length > 1 &amp;&amp; (
+                  &lt;button type="button" onClick={() => removeTask(index)}>
+                    &lt;X size={16} />
+                    Quitar
+                  &lt;/button>
+                )}
+              &lt;/div>
+              &lt;div className="form-grid">
+                &lt;Field
+                  label="Nombre"
+                  value={task.title}
+                  onChange={(event) =>
+                    updateTask(index, "title", event.target.value)
+                  }
+                  placeholder="Nombre de la tarea"
+                />
+                &lt;Field
+                  label="Área"
+                  value={task.area}
+                  onChange={(event) =>
+                    updateTask(index, "area", event.target.value)
+                  }
+                  placeholder="Ej. Logística"
+                />
+              &lt;/div>
+              &lt;Field
+                label="Descripción"
+                as="textarea"
+                value={task.description}
+                onChange={(event) =>
+                  updateTask(index, "description", event.target.value)
+                }
+                placeholder="¿Qué debe hacer el voluntario?"
+              />
+              &lt;Field
+                label="Prioridad"
+                as="select"
+                value={task.priority}
+                onChange={(event) =>
+                  updateTask(index, "priority", event.target.value)
+                }
+                options={["Alta", "Media", "Baja"]}
+              />
+            &lt;/div>
+          ))}
+        &lt;/section>
+
+        {error &amp;&amp; &lt;p className="form-error">{error}&lt;/p>}
+
+        &lt;footer className="form-footer">
+          &lt;Button
+            variant="secondary"
+            type="button"
+            onClick={() => go("/company/dashboard")}
+          >
+            Cancelar
+          &lt;/Button>
+          &lt;Button type="submit" icon={Send} disabled={busy}>
+            {busy ? "Publicando..." : "Publicar iniciativa"}
+          &lt;/Button>
+        &lt;/footer>
+      &lt;/form>
+    &lt;/section>
+  );
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ActivitiesPage">ActivitiesPage</a></li><li><a href="global.html#AuthPage">AuthPage</a></li><li><a href="global.html#CompanyDashboard">CompanyDashboard</a></li><li><a href="global.html#CompanyPublicProfilePage">CompanyPublicProfilePage</a></li><li><a href="global.html#Field">Field</a></li><li><a href="global.html#HistoryPage">HistoryPage</a></li><li><a href="global.html#ModalNuevaTarea">ModalNuevaTarea</a></li><li><a href="global.html#NewInitiativePage">NewInitiativePage</a></li><li><a href="global.html#NotificationsPage">NotificationsPage</a></li><li><a href="global.html#ProfilePage">ProfilePage</a></li><li><a href="global.html#companyInitiatives">companyInitiatives</a></li><li><a href="global.html#createNotification">createNotification</a></li><li><a href="global.html#ownProfile">ownProfile</a></li><li><a href="global.html#profileToForm">profileToForm</a></li><li><a href="global.html#serializeInitiative">serializeInitiative</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 03:10:54 GMT-0500 (hora estándar de Perú)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

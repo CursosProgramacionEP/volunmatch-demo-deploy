@@ -1,0 +1,19 @@
+{
+  "name": "volunmatch",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n API,WEB -c green,cyan \"npm run dev --workspace=@volunmatch/backend\" \"npm run dev --workspace=@volunmatch/frontend\"",
+    "dev:api": "npm run dev --workspace=@volunmatch/backend",
+    "dev:web": "npm run dev --workspace=@volunmatch/frontend",
+    "build": "npm run build --workspace=@volunmatch/frontend",
+    "start": "npm run start --workspace=@volunmatch/backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
