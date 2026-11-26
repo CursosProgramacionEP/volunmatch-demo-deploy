@@ -177,7 +177,4 @@ Al crear una iniciativa, VolunMatch te ofrece una ayuda inteligente para ahorrar
 
 Si tienes problemas técnicos, contacta al equipo de desarrollo:
 
-- **Huancas Zuleika**
-- **Leyva Merly**
-- **López Sayuri**
-- **Santamaría Greysy**
+- Equipo del proyecto VolunMatch (Curso Integrador I)
