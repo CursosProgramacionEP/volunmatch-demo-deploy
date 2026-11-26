@@ -18,14 +18,21 @@ import { procesarCierresDeIniciativas } from "./helpers/cierreIniciativas.js";
 
 const app = express();
 
+// Render (y casi todo hosting) pone un proxy delante: sin esto, el rate limit ve a todos
+// los usuarios con la misma IP.
+app.set("trust proxy", 1);
+
 // 1. Middleware de seguridad
-app.use(helmet());
+// cross-origin: el frontend (Vercel) está en otro dominio y debe poder mostrar las fotos de /uploads.
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
 // 2. CORS configurado con los orígenes de tu compañera Y tu validación estricta
 const allowedOrigins = [
   "http://64.181.207.220",
   "http://localhost:5173", // Frontend local (Vite)
   "http://localhost:3000", // Frontend local (alternativo)
+  // Dominio del frontend en producción, sin "/" al final. Admite varios separados por comas.
+  ...(process.env.FRONTEND_URL || "").split(",").map((u) => u.trim()).filter(Boolean),
 ];
 
 app.use(
